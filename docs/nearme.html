@@ -276,7 +276,7 @@ function renderCards(top10) {
           ${Array.from({length:7},(_,j)=>`<div class="dot ${j<item.score?'filled':''}"></div>`).join('')}
           <span class="score-label">Score ${item.score}/7</span>
         </div>
-        ${nav ? `<a class="nav-btn" href="${nav}" target="_blank" rel="noopener">📍 Navigate to address</a>` : ''}
+        ${nav ? `<a class="nav-btn" href="${nav}" target="_blank" rel="noopener" onclick="(function(){window.dataLayer=window.dataLayer||[];window.dataLayer.push({event:'navigate_address',ethnicity:'${r.ESTIMATED_ETHNICITY||'Unknown'}',county:'${r.SOURCE||''}'})})()" >📍 Navigate to address</a>` : ''}
         <div class="actions">
           <button class="action-btn ${visitedCls}"    id="nm-visited-${i}"    onclick="toggleVisited(${i},event)">${visitedTxt}</button>
           <button class="action-btn ${interestedCls}" id="nm-interested-${i}" onclick="toggleInterested(${i},event)">${interestedTxt}</button>
@@ -295,6 +295,8 @@ let top10Cache = [];
 let currentPeriod = 30;
 
 function switchPeriod(days) {
+  window.dataLayer = window.dataLayer || [];
+  window.dataLayer.push({ event: 'period_switch', period: days });
   currentPeriod = days;
   document.getElementById('btn-30').style.background  = days === 30  ? '#1a73e8' : 'white';
   document.getElementById('btn-30').style.color        = days === 30  ? 'white'   : '#1a73e8';
@@ -317,6 +319,8 @@ function toggleVisited(i, e) {
   const active = btn.classList.toggle('visited');
   btn.textContent = active ? '✅ Visited' : '❓ Visited';
   setState(top10Cache[i].r, {visited: active});
+  window.dataLayer = window.dataLayer || [];
+  window.dataLayer.push({ event: 'mark_visited', status: active ? 'visited' : 'unvisited', ethnicity: top10Cache[i].r.ESTIMATED_ETHNICITY || 'Unknown', county: top10Cache[i].r.SOURCE || '' });
   const card = document.getElementById('nm-card-' + i);
   card.style.opacity = (active && !card.classList.contains('open')) ? '0.45' : '1';
 }
@@ -327,6 +331,8 @@ function toggleInterested(i, e) {
   const active = btn.classList.toggle('interested');
   btn.textContent = active ? '📌 Following Up' : '❓ Follow Up?';
   setState(top10Cache[i].r, {interested: active});
+  window.dataLayer = window.dataLayer || [];
+  window.dataLayer.push({ event: 'mark_follow_up', status: active ? 'following' : 'unfollowing', ethnicity: top10Cache[i].r.ESTIMATED_ETHNICITY || 'Unknown', county: top10Cache[i].r.SOURCE || '' });
   renderFollowUp();
 }
 
@@ -365,7 +371,7 @@ function renderFollowUp() {
           <button class="note-save visible" onclick="saveFpNote('${key}')">Save note</button>
           <div class="note-saved-text" id="fp-note-saved-${key}">✓ Saved</div>
         </div>
-        ${nav ? `<a class="nav-btn" href="${nav}" target="_blank" rel="noopener">📍 Navigate to address</a>` : ''}
+        ${nav ? `<a class="nav-btn" href="${nav}" target="_blank" rel="noopener" onclick="(function(){window.dataLayer=window.dataLayer||[];window.dataLayer.push({event:'navigate_address',ethnicity:'${eth}',county:'${r.SOURCE||''}'})})()" >📍 Navigate to address</a>` : ''}
         <div style="margin-top:10px">
           <button style="font-size:.78em;color:#c0392b;background:none;border:1px solid #eaa;border-radius:6px;padding:5px 10px;cursor:pointer"
             onclick="removeFollowUp('${key}', event)">✕ Remove from Following Up</button>
@@ -399,6 +405,8 @@ function removeFollowUp(key, e) {
   e.stopPropagation();
   const stored = JSON.parse(localStorage.getItem(key) || '{}');
   localStorage.setItem(key, JSON.stringify({...stored, interested: false}));
+  window.dataLayer = window.dataLayer || [];
+  window.dataLayer.push({ event: 'remove_follow_up' });
   top10Cache.forEach((item, i) => {
     if (cardKey(item.r) === key) {
       const btn = document.getElementById('nm-interested-' + i);
@@ -418,6 +426,8 @@ function toggleNote(i, e) {
 function saveNote(i) {
   const val = document.getElementById('nm-note-' + i).value;
   setState(top10Cache[i].r, {note: val});
+  window.dataLayer = window.dataLayer || [];
+  window.dataLayer.push({ event: 'save_note' });
   const saved = document.getElementById('nm-note-saved-' + i);
   saved.style.display = 'block';
   setTimeout(() => saved.style.display = 'none', 1500);
@@ -473,6 +483,8 @@ function parseDate(s) {
 }
 
 async function locateMe() {
+  window.dataLayer = window.dataLayer || [];
+  window.dataLayer.push({ event: 'locate_me' });
   const btn = document.getElementById('locate-btn');
   btn.disabled = true;
   btn.textContent = '⏳ Getting location…';
