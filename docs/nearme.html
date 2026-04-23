@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <title>OIC — Near Me</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #f0f2f5; color: #1a1a2e; min-height: 100vh; }
+
+    header {
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+      color: white; padding: 20px 16px 16px; text-align: center;
+    }
+    header h1 { font-size: 1.2em; font-weight: 700; }
+    header p  { font-size: .78em; opacity: .65; margin-top: 4px; }
+    .back-link { display: inline-block; margin-top: 10px; font-size: .8em; color: rgba(255,255,255,.6); text-decoration: none; }
+    .back-link:hover { color: white; }
+
+    .locate-wrap { text-align: center; padding: 24px 16px; }
+    .locate-btn {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 14px 28px; background: #1a73e8; color: white;
+      border: none; border-radius: 12px; font-size: 1em; font-weight: 600;
+      cursor: pointer; -webkit-tap-highlight-color: transparent;
+    }
+    .locate-btn:active { opacity: .8; }
+    .locate-btn:disabled { background: #aaa; cursor: default; }
+
+    .status { text-align: center; padding: 12px 16px; font-size: .85em; color: #888; }
+
+    .section-label { text-align: center; font-size: .78em; color: #888; padding: 0 16px 12px; }
+
+    .cards { padding: 0 12px 80px; }
+
+    .card {
+      background: white; border-radius: 12px; margin-bottom: 10px;
+      overflow: hidden; box-shadow: 0 1px 4px rgba(0,0,0,.08);
+      border-left: 4px solid #ccc;
+    }
+    .card.open { box-shadow: 0 4px 16px rgba(0,0,0,.12); }
+
+    .card-header {
+      display: flex; align-items: center; padding: 13px 14px;
+      cursor: pointer; gap: 12px; -webkit-tap-highlight-color: transparent;
+    }
+    .rank { font-size: 1.1em; font-weight: 800; color: #bbb; min-width: 22px; text-align: center; }
+    .card-main { flex: 1; min-width: 0; }
+    .card-name { font-size: .95em; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .card-meta { font-size: .78em; color: #888; margin-top: 3px; display: flex; gap: 8px; flex-wrap: wrap; }
+    .eth-badge { display: inline-block; padding: 2px 8px; border-radius: 20px; font-size: .72em; font-weight: 700; color: white; white-space: nowrap; }
+    .chevron { font-size: .8em; color: #ccc; transition: transform .25s; min-width: 16px; }
+    .card.open .chevron { transform: rotate(180deg); }
+
+    .card-detail { display: none; padding: 0 14px 14px 48px; font-size: .84em; color: #555; border-top: 1px solid #f0f0f0; }
+    .card.open .card-detail { display: block; padding-top: 12px; }
+    .detail-row { display: flex; gap: 8px; margin-bottom: 6px; align-items: flex-start; }
+    .detail-label { color: #aaa; min-width: 64px; font-size: .88em; padding-top: 1px; }
+    .detail-value { color: #333; font-weight: 500; }
+
+    .score-dots { display: flex; gap: 4px; margin-top: 10px; padding-top: 10px; border-top: 1px solid #f0f0f0; }
+    .dot { width: 10px; height: 10px; border-radius: 50%; background: #e0e0e0; }
+    .dot.filled { background: #1a73e8; }
+    .score-label { font-size: .75em; color: #aaa; margin-left: 6px; align-self: center; }
+
+    .nav-btn {
+      display: inline-flex; align-items: center; gap: 6px; margin-top: 12px;
+      padding: 7px 14px; background: transparent; color: #1a73e8;
+      border: 1px solid #d0d8e8; border-radius: 8px; font-size: .82em;
+      font-weight: 500; text-decoration: none; -webkit-tap-highlight-color: transparent;
+    }
+
+    .actions { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+    .action-btn {
+      flex: 1; min-width: 80px; padding: 8px 6px; border-radius: 8px;
+      font-size: .78em; font-weight: 600; border: 1px solid #e0e0e0;
+      background: white; color: #555; cursor: pointer; text-align: center;
+      -webkit-tap-highlight-color: transparent; transition: all .15s;
+    }
+    .action-btn.visited    { background: #eafaf1; border-color: #27ae60; color: #27ae60; }
+    .action-btn.interested { background: #fef9e7; border-color: #f39c12; color: #e67e22; }
+
+    .note-area {
+      width: 100%; margin-top: 10px; padding: 8px 10px;
+      border: 1px solid #e0e0e0; border-radius: 8px; font-size: .82em;
+      font-family: inherit; color: #333; resize: none; min-height: 60px; display: none;
+    }
+    .note-area.visible { display: block; }
+    .note-save { margin-top: 6px; padding: 6px 14px; background: #f0f0f0; border: none; border-radius: 6px; font-size: .78em; font-weight: 600; color: #555; cursor: pointer; display: none; }
+    .note-save.visible { display: inline-block; }
+    .note-saved-text { font-size: .78em; color: #aaa; margin-top: 6px; display: none; }
+
+    .footnotes { padding: 0 16px 24px; font-size: .74em; color: #aaa; line-height: 1.7; }
+    .footnotes p { margin-bottom: 4px; }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>📍 Near Me</h1>
+  <p>Top 10 households closest to your current location</p>
+  <a class="back-link" href="index.html">← Back to OIC Outreach</a>
+</header>
+
+<div class="locate-wrap">
+  <button class="locate-btn" id="locate-btn" onclick="locateMe()">
+    📍 Find households near me
+  </button>
+</div>
+<div class="status" id="status"></div>
+<p class="section-label" id="section-label" style="display:none"></p>
+<div class="cards" id="cards-container"></div>
+<div class="footnotes" id="footnotes" style="display:none">
+  <p>¹ Distance shown from your current location, not OIC church.</p>
+  <p>² Ethnicity estimated from US Census surname data — not verified.</p>
+  <p>³ Score (max 7): Chinese=+3, other Asian=+2, Hispanic/Black=+1 · out-of-state=+2, in-state/unknown=+1 · ≤0.5mi=+3, ≤1mi=+2, ≤2mi=+1.</p>
+</div>
+
+<script>
+const ETH_COLOR = {
+  "Asian/PI":"#1a73e8","Hispanic":"#e67e22","Black":"#8e44ad",
+  "White":"#7f8c8d","Unknown":"#95a5a6","Am.Indian":"#27ae60","Multiracial":"#c0392b"
+};
+
+let allRecords = [];
+let userLat, userLon;
+
+// ── CSV parser ────────────────────────────────────────────────────────────────
+function parseCSV(text) {
+  const lines = text.trim().split('\n');
+  const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g,''));
+  return lines.slice(1).map(line => {
+    const vals = [];
+    let cur = '', inQuote = false;
+    for (const ch of line) {
+      if (ch === '"') { inQuote = !inQuote; }
+      else if (ch === ',' && !inQuote) { vals.push(cur.trim()); cur = ''; }
+      else { cur += ch; }
+    }
+    vals.push(cur.trim());
+    const obj = {};
+    headers.forEach((h, i) => obj[h] = vals[i] || '');
+    return obj;
+  });
+}
+
+// ── Scoring ───────────────────────────────────────────────────────────────────
+function distMiles(lat1, lon1, lat2, lon2) {
+  const R = 3958.8;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180) * Math.cos(lat2*Math.PI/180) * Math.sin(dLon/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+function scoreRecord(r, uLat, uLon) {
+  const eth    = r.ESTIMATED_ETHNICITY || '';
+  const isCn   = r.IS_CHINESE === 'True';
+  const origin = r.MOVE_ORIGIN || '';
+  const lat    = parseFloat(r.LAT), lon = parseFloat(r.LON);
+  if (isNaN(lat) || isNaN(lon)) return -1;
+
+  const d = distMiles(uLat, uLon, lat, lon);
+
+  const ethS = isCn ? 3 : eth === 'Asian/PI' ? 2 : (eth === 'Hispanic' || eth === 'Black') ? 1 : 0;
+  const oriS = origin.startsWith('Out-of-state') ? 2 : 1;
+  const disS = d <= 0.5 ? 3 : d <= 1 ? 2 : d <= 2 ? 1 : 0;
+
+  return { score: ethS + oriS + disS, dist: d };
+}
+
+function fmtOrigin(o) {
+  if (o.startsWith('Out-of-state')) return '✈ Moved from ' + o.replace('Out-of-state (','').replace(')','');
+  if (o.startsWith('In-state')) return '↔ Moved within VA';
+  return '? Origin unknown';
+}
+
+function fmtName(n) {
+  return n.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+}
+
+// ── localStorage (shared with index.html) ─────────────────────────────────────
+function cardKey(r) {
+  const name = (r.Owner1||'').replace(/[^a-z0-9]/gi,'').toLowerCase().slice(0,12);
+  const date = (r.Sale1D||'').replace(/[^0-9]/g,'');
+  const lat  = parseFloat(r.LAT||0).toFixed(3);
+  const lon  = parseFloat(r.LON||0).toFixed(3);
+  return `oic-${name}-${date}-${lat}-${lon}`;
+}
+function getState(r)       { return JSON.parse(localStorage.getItem(cardKey(r)) || '{}'); }
+function setState(r, patch) { const s = getState(r); localStorage.setItem(cardKey(r), JSON.stringify({...s,...patch})); }
+
+// ── Render ────────────────────────────────────────────────────────────────────
+function renderCards(top10) {
+  const container = document.getElementById('cards-container');
+  container.innerHTML = top10.map((item, i) => {
+    const r     = item.r;
+    const eth   = r.ESTIMATED_ETHNICITY || 'Unknown';
+    const color = ETH_COLOR[eth] || '#95a5a6';
+    const nav   = (r.LAT && r.LON) ? `https://maps.google.com/?q=${parseFloat(r.LAT)},${parseFloat(r.LON)}` : '';
+    const addr  = (r.LocAddr||'').replace(/^\d+\.0\s*/,'').trim() || 'Address on file';
+    const state = getState(r);
+    const visitedCls    = state.visited    ? 'visited'    : '';
+    const interestedCls = state.interested ? 'interested' : '';
+    const visitedTxt    = state.visited    ? '✅ Visited'    : '❓ Visited';
+    const interestedTxt = state.interested ? '📌 Following Up' : '❓ Follow Up?';
+    return `
+    <div class="card" id="nm-card-${i}" style="border-left-color:${color};opacity:${state.visited?'0.45':'1'}">
+      <div class="card-header" onclick="toggleCard(${i})">
+        <span class="rank">${i+1}</span>
+        <div class="card-main">
+          <div class="card-name">${fmtName(r.Owner1||'')}</div>
+          <div class="card-meta">
+            <span>${item.dist.toFixed(1)} mi · ${r.SOURCE||''}</span>
+            <span style="color:#aaa">·</span>
+            <span>${r.Sale1D||''}</span>
+          </div>
+        </div>
+        <span class="eth-badge" style="background:${color}">${eth}</span>
+        <span class="chevron">▼</span>
+      </div>
+      <div class="card-detail">
+        <div class="detail-row"><span class="detail-label">Address</span><span class="detail-value">${addr}, ${r.SOURCE||''}</span></div>
+        <div class="detail-row"><span class="detail-label">Origin</span><span class="detail-value">${fmtOrigin(r.MOVE_ORIGIN||'')}</span></div>
+        <div class="detail-row"><span class="detail-label">Household</span><span class="detail-value">Est. ${r.EST_HOUSEHOLD_SIZE||'?'} people</span></div>
+        <div class="score-dots">
+          ${Array.from({length:7},(_,j)=>`<div class="dot ${j<item.score?'filled':''}"></div>`).join('')}
+          <span class="score-label">Score ${item.score}/7</span>
+        </div>
+        ${nav ? `<a class="nav-btn" href="${nav}" target="_blank" rel="noopener">📍 Navigate to address</a>` : ''}
+        <div class="actions">
+          <button class="action-btn ${visitedCls}"    id="nm-visited-${i}"    onclick="toggleVisited(${i},event)">${visitedTxt}</button>
+          <button class="action-btn ${interestedCls}" id="nm-interested-${i}" onclick="toggleInterested(${i},event)">${interestedTxt}</button>
+          <button class="action-btn" onclick="toggleNote(${i},event)">📝 Note</button>
+        </div>
+        <textarea class="note-area ${state.note?'visible':''}" id="nm-note-${i}" placeholder="Add a note..."
+          oninput="saveNote(${i})" onchange="saveNote(${i})">${state.note||''}</textarea>
+        <button class="note-save ${state.note?'visible':''}" id="nm-note-save-${i}" onclick="saveNote(${i})">Save note</button>
+        <div class="note-saved-text" id="nm-note-saved-${i}">✓ Saved</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+let top10Cache = [];
+
+function toggleCard(i) {
+  const card = document.getElementById('nm-card-' + i);
+  card.classList.toggle('open');
+  const isOpen = card.classList.contains('open');
+  const isVisited = document.getElementById('nm-visited-' + i)?.classList.contains('visited');
+  card.style.opacity = (!isOpen && isVisited) ? '0.45' : '1';
+}
+
+function toggleVisited(i, e) {
+  e.stopPropagation();
+  const btn = document.getElementById('nm-visited-' + i);
+  const active = btn.classList.toggle('visited');
+  btn.textContent = active ? '✅ Visited' : '❓ Visited';
+  setState(top10Cache[i].r, {visited: active});
+  const card = document.getElementById('nm-card-' + i);
+  card.style.opacity = (active && !card.classList.contains('open')) ? '0.45' : '1';
+}
+
+function toggleInterested(i, e) {
+  e.stopPropagation();
+  const btn = document.getElementById('nm-interested-' + i);
+  const active = btn.classList.toggle('interested');
+  btn.textContent = active ? '📌 Following Up' : '❓ Follow Up?';
+  setState(top10Cache[i].r, {interested: active});
+}
+
+function toggleNote(i, e) {
+  e.stopPropagation();
+  document.getElementById('nm-note-' + i).classList.toggle('visible');
+  document.getElementById('nm-note-save-' + i).classList.toggle('visible');
+  document.getElementById('nm-note-' + i).focus();
+}
+
+function saveNote(i) {
+  const val = document.getElementById('nm-note-' + i).value;
+  setState(top10Cache[i].r, {note: val});
+  const saved = document.getElementById('nm-note-saved-' + i);
+  saved.style.display = 'block';
+  setTimeout(() => saved.style.display = 'none', 1500);
+}
+
+// ── Main flow ─────────────────────────────────────────────────────────────────
+function setStatus(msg) { document.getElementById('status').textContent = msg; }
+
+async function loadCSV() {
+  if (allRecords.length) return;
+  setStatus('Loading data…');
+  const r = await fetch('all_homeowners_20mi.csv');
+  const text = await r.text();
+  allRecords = parseCSV(text);
+  setStatus('');
+}
+
+function showTop10(uLat, uLon) {
+  const scored = allRecords
+    .map(r => { const s = scoreRecord(r, uLat, uLon); return s === -1 ? null : {r, score: s.score, dist: s.dist}; })
+    .filter(Boolean)
+    .sort((a, b) => b.score - a.score || a.dist - b.dist)
+    .slice(0, 10);
+
+  top10Cache = scored;
+  document.getElementById('section-label').style.display = '';
+  document.getElementById('section-label').textContent = `Top 10 within range · sorted by priority`;
+  document.getElementById('footnotes').style.display = '';
+  renderCards(scored);
+}
+
+async function locateMe() {
+  const btn = document.getElementById('locate-btn');
+  btn.disabled = true;
+  btn.textContent = '⏳ Getting location…';
+
+  try {
+    await loadCSV();
+    setStatus('Requesting location…');
+    navigator.geolocation.getCurrentPosition(
+      pos => {
+        userLat = pos.coords.latitude;
+        userLon = pos.coords.longitude;
+        setStatus(`📍 Location found · Scoring ${allRecords.length.toLocaleString()} households…`);
+        setTimeout(() => {
+          showTop10(userLat, userLon);
+          setStatus('');
+          btn.textContent = '🔄 Refresh';
+          btn.disabled = false;
+          btn.onclick = () => showTop10(userLat, userLon);
+        }, 50);
+      },
+      err => {
+        setStatus('⚠️ Location unavailable: ' + err.message);
+        btn.textContent = '📍 Find households near me';
+        btn.disabled = false;
+      },
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+  } catch(e) {
+    setStatus('⚠️ Error: ' + e.message);
+    btn.disabled = false;
+  }
+}
+</script>
+</body>
+</html>

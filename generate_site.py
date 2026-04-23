@@ -418,6 +418,7 @@ def build_html(t_month, t_year, now, month_label):
 <header>
   <h1>⛪ OIC Outreach</h1>
   <p>New homeowners within 20 miles · Updated {now.strftime("%b %d, %Y")}</p>
+  <a href="nearme.html" style="display:inline-block;margin-top:10px;font-size:.8em;color:rgba(255,255,255,.7);text-decoration:none">📍 Near me →</a>
 </header>
 
 <div class="followup-wrap" id="followup-wrap">
@@ -733,6 +734,11 @@ def main():
     with open(OUT_FILE, "w", encoding="utf-8") as f:
         f.write(html)
     print(f"✅ Site generated → {OUT_FILE}")
+
+    # Copy CSV to docs/ so GitHub Pages can serve it for nearme.html
+    import shutil
+    shutil.copy(INPUT_FILE, "docs/all_homeowners_20mi.csv")
+    print(f"✅ CSV copied → docs/all_homeowners_20mi.csv")
 
 if __name__ == "__main__":
     main()
