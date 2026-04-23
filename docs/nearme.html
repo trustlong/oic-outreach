@@ -126,6 +126,10 @@ const ETH_COLOR = {
 let allRecords = [];
 let userLat, userLon;
 
+// ── Entity filter ─────────────────────────────────────────────────────────────
+const ENTITY_RE = /\b(LLC|INC|CORP|LTD|LP|LLP|TRUST|TRS|PROPERTIES|HOLDINGS|REALTY|GROUP|FUND|FOUNDATION|SERIES|CONSERVE|BUILDWELL|ENTERPRISES|PARTNERS|VENTURES|CAPITAL|INVESTMENTS|ESTATE|MORTGAGE|TITLE|ABSTRACT)\b/i;
+function isEntity(owner) { return ENTITY_RE.test(owner || ''); }
+
 // ── CSV parser ────────────────────────────────────────────────────────────────
 function parseCSV(text) {
   const lines = text.trim().split('\n');
@@ -300,6 +304,7 @@ async function loadCSV() {
 
 function showTop10(uLat, uLon) {
   const scored = allRecords
+    .filter(r => !isEntity(r.Owner1) && r.MOVE_ORIGIN !== 'Local')
     .map(r => { const s = scoreRecord(r, uLat, uLon); return s === -1 ? null : {r, score: s.score, dist: s.dist}; })
     .filter(Boolean)
     .sort((a, b) => b.score - a.score || a.dist - b.dist)
