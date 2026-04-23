@@ -1,10 +1,7 @@
 """
-Generates docs/index.html — the OIC outreach dashboard.
-Produces two ranked tables:
-  1. Top 10 for the current calendar month
-  2. Top 10 for the past 12 months (no recency filter)
-
-Run after find_all_homeowners_20mi.py.
+Generates docs/index.html — OIC outreach dashboard (mobile-first design).
+Two views toggled by a switch: This Month vs Past 12 Months.
+Each homeowner shown as a compact card, expandable for full details.
 """
 
 import re, os
@@ -23,13 +20,13 @@ ENTITY_RE = re.compile(
 )
 
 ETH_COLOR = {
-    "Asian/PI":   "#e8f4fd",
-    "Hispanic":   "#fef9e7",
-    "Black":      "#fdf2f8",
-    "White":      "#f9f9f9",
-    "Unknown":    "#f5f5f5",
-    "Am.Indian":  "#f0fff0",
-    "Multiracial":"#fff0f5",
+    "Asian/PI":    "#1a73e8",
+    "Hispanic":    "#e67e22",
+    "Black":       "#8e44ad",
+    "White":       "#7f8c8d",
+    "Unknown":     "#95a5a6",
+    "Am.Indian":   "#27ae60",
+    "Multiracial": "#c0392b",
 }
 
 def parse_date(s):
@@ -59,7 +56,7 @@ def load_and_clean():
     return df
 
 def top10_month(df, year, month):
-    sub = df[(df["_dt"].apply(lambda d: d.year == year and d.month == month))].copy()
+    sub = df[df["_dt"].apply(lambda d: d.year == year and d.month == month)].copy()
     sub["SCORE"] = sub.apply(lambda r: score(r, include_recency=False), axis=1)
     return sub.sort_values(["SCORE", "DISTANCE_MILES"], ascending=[False, True]).head(10)
 
@@ -72,98 +69,648 @@ def top10_year(df):
 def fmt_origin(o):
     o = str(o)
     if o.startswith("Out-of-state"):
-        state = o.replace("Out-of-state (","").replace(")","")
-        return f'<span style="color:#c0392b;font-weight:600">✈ {state}</span>'
+        state = o.replace("Out-of-state (", "").replace(")", "")
+        return f"✈ Moved from {state}"
     if o.startswith("In-state"):
-        return '<span style="color:#2980b9">↔ In-state VA</span>'
-    return '<span style="color:#888">? Unknown</span>'
+        return "↔ Moved within VA"
+    return "? Origin unknown"
 
-def table_html(df, title, subtitle):
-    rows = ""
-    for _, r in df.iterrows():
-        eth   = str(r.get("ESTIMATED_ETHNICITY",""))
-        color = ETH_COLOR.get(eth, "#fff")
-        dist  = float(r.get("DISTANCE_MILES", 0))
-        hh    = r.get("EST_HOUSEHOLD_SIZE", "")
-        rows += f"""
-        <tr style="background:{color}">
-          <td style="text-align:center;font-weight:700;font-size:1.1em">{int(r['SCORE'])}</td>
-          <td style="text-align:center">{dist:.1f} mi</td>
-          <td>{r.get('SOURCE','')}</td>
-          <td style="font-weight:600">{r.get('Owner1','')}</td>
-          <td style="color:#555;font-size:.9em">{r.get('LocAddr','') or '—'}</td>
-          <td style="text-align:center">{r.get('Sale1D','')}</td>
-          <td><span style="background:{color};border:1px solid #ccc;border-radius:4px;padding:2px 6px;font-size:.85em">{eth}</span></td>
-          <td style="font-size:.9em">{fmt_origin(r.get('MOVE_ORIGIN',''))}</td>
-          <td style="text-align:center">{hh}</td>
-        </tr>"""
+def fmt_name(owner):
+    """Title-case and clean up owner name."""
+    if not isinstance(owner, str): return owner
+    # Remove trailing suffixes
+    name = owner.strip().rstrip(".")
+    # Title case
+    return " ".join(w.capitalize() for w in name.split())
 
-    return f"""
-    <div class="table-block">
-      <h2>{title}</h2>
-      <p class="subtitle">{subtitle}</p>
-      <table>
-        <thead><tr>
-          <th>Score</th><th>Distance</th><th>County</th><th>Owner</th>
-          <th>Address</th><th>Sale Date</th><th>Ethnicity</th><th>Origin</th><th>HH</th>
-        </tr></thead>
-        <tbody>{rows}</tbody>
-      </table>
-    </div>"""
+def cards_json(df):
+    """Serialize top-10 rows to a JS-safe list of dicts."""
+    import json
+    rows = []
+    for i, (_, r) in enumerate(df.iterrows(), 1):
+        eth    = str(r.get("ESTIMATED_ETHNICITY", "Unknown"))
+        origin = str(r.get("MOVE_ORIGIN", ""))
+        dist   = float(r.get("DISTANCE_MILES", 0))
+        hh     = r.get("EST_HOUSEHOLD_SIZE", "")
+        addr   = str(r.get("LocAddr", "") or "").strip()
+        lat = r.get("LAT", "")
+        lon = r.get("LON", "")
+        try:
+            nav_url = f"https://maps.google.com/?q={float(lat)},{float(lon)}" if lat and lon else ""
+        except Exception:
+            nav_url = ""
+        rows.append({
+            "rank":    i,
+            "score":   int(r.get("SCORE", 0)),
+            "name":    fmt_name(str(r.get("Owner1", ""))),
+            "addr":    addr if addr and addr != "0.0" else "Address on file",
+            "county":  str(r.get("SOURCE", "")),
+            "date":    str(r.get("Sale1D", "")),
+            "eth":     eth,
+            "color":   ETH_COLOR.get(eth, "#95a5a6"),
+            "origin":  fmt_origin(origin),
+            "hh":      str(hh) if hh else "—",
+            "dist":    f"{dist:.1f}",
+            "nav":     nav_url,
+            "lat":     float(lat) if lat else 0,
+            "lon":     float(lon) if lon else 0,
+        })
+    return json.dumps(rows)
 
 def build_html(t_month, t_year, now, month_label):
-    scoring_note = """
-    <b>Scoring (max 8):</b>
-    Asian/PI +3 &nbsp;|&nbsp; Hispanic/Black +2 &nbsp;|&nbsp; Other +1 &nbsp;&nbsp;
-    Out-of-state +2 &nbsp;|&nbsp; In-state/Unknown +1 &nbsp;&nbsp;
-    ≤5 mi +2 &nbsp;|&nbsp; 5–10 mi +1 &nbsp;&nbsp;
-    Past 30 days +1 (year table only)
-    """
+    month_data = cards_json(t_month)
+    year_data  = cards_json(t_year)
+
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>OIC Outreach — New Homeowners</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <title>OIC Outreach</title>
   <style>
-    body {{ font-family: -apple-system, Arial, sans-serif; margin: 0; background: #f4f6f9; color: #333; }}
-    header {{ background: #2c3e50; color: white; padding: 24px 32px; }}
-    header h1 {{ margin: 0 0 4px; font-size: 1.6em; }}
-    header p  {{ margin: 0; opacity: .75; font-size: .95em; }}
-    .container {{ max-width: 1100px; margin: 0 auto; padding: 24px 16px; }}
-    .table-block {{ background: white; border-radius: 10px; padding: 24px; margin-bottom: 32px;
-                    box-shadow: 0 2px 8px rgba(0,0,0,.08); }}
-    h2 {{ margin: 0 0 4px; font-size: 1.25em; color: #2c3e50; }}
-    .subtitle {{ color: #888; margin: 0 0 16px; font-size: .9em; }}
-    table {{ width: 100%; border-collapse: collapse; font-size: .9em; }}
-    th {{ background: #2c3e50; color: white; padding: 10px 12px; text-align: left; font-weight: 600; }}
-    td {{ padding: 9px 12px; border-bottom: 1px solid #eee; vertical-align: middle; }}
-    tr:last-child td {{ border-bottom: none; }}
-    .scoring {{ background: white; border-radius: 10px; padding: 16px 24px; margin-bottom: 24px;
-                font-size: .85em; color: #555; box-shadow: 0 2px 8px rgba(0,0,0,.06); }}
-    footer {{ text-align: center; padding: 24px; font-size: .8em; color: #aaa; }}
-    .legend {{ display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }}
-    .leg-item {{ display: flex; align-items: center; gap: 6px; font-size: .82em; }}
-    .leg-dot {{ width: 14px; height: 14px; border-radius: 3px; border: 1px solid #ccc; }}
+    * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+
+    body {{
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #f0f2f5;
+      color: #1a1a2e;
+      min-height: 100vh;
+    }}
+
+    /* ── Header ── */
+    header {{
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+      color: white;
+      padding: 20px 16px 16px;
+      text-align: center;
+    }}
+    header h1 {{ font-size: 1.2em; font-weight: 700; letter-spacing: .3px; }}
+    header p  {{ font-size: .78em; opacity: .65; margin-top: 4px; }}
+
+    /* ── Following Up section ── */
+    .followup-wrap {{
+      display: none;
+      margin: 0 12px 4px;
+      background: #fff8ee;
+      border: 1px solid #f5d78e;
+      border-radius: 12px;
+      overflow: hidden;
+    }}
+    .followup-wrap.has-items {{ display: block; }}
+    .followup-header {{
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 14px 6px;
+      font-size: .82em;
+      font-weight: 700;
+      color: #b7791f;
+    }}
+    .followup-header span {{ font-weight: 400; color: #c4933f; font-size: .9em; }}
+    .followup-cards {{ padding: 0 8px 8px; }}
+
+    /* ── Toggle ── */
+    .toggle-wrap {{
+      display: flex;
+      justify-content: center;
+      padding: 16px;
+      gap: 0;
+    }}
+    .toggle-btn {{
+      flex: 1;
+      max-width: 180px;
+      padding: 10px 0;
+      font-size: .88em;
+      font-weight: 600;
+      border: 2px solid #1a73e8;
+      cursor: pointer;
+      transition: all .2s;
+      background: white;
+      color: #1a73e8;
+    }}
+    .toggle-btn:first-child {{ border-radius: 8px 0 0 8px; border-right: none; }}
+    .toggle-btn:last-child  {{ border-radius: 0 8px 8px 0; }}
+    .toggle-btn.active {{ background: #1a73e8; color: white; }}
+
+    /* ── Section label ── */
+    .section-label {{
+      text-align: center;
+      font-size: .78em;
+      color: #888;
+      padding: 0 16px 12px;
+    }}
+
+    /* ── Cards ── */
+    .cards {{ padding: 0 12px 80px; }}
+
+    .card {{
+      background: white;
+      border-radius: 12px;
+      margin-bottom: 10px;
+      overflow: hidden;
+      box-shadow: 0 1px 4px rgba(0,0,0,.08);
+      border-left: 4px solid #ccc;
+      transition: box-shadow .2s;
+    }}
+    .card.open {{ box-shadow: 0 4px 16px rgba(0,0,0,.12); }}
+
+    .card-header {{
+      display: flex;
+      align-items: center;
+      padding: 13px 14px;
+      cursor: pointer;
+      gap: 12px;
+      -webkit-tap-highlight-color: transparent;
+    }}
+
+    .rank {{
+      font-size: 1.1em;
+      font-weight: 800;
+      color: #bbb;
+      min-width: 22px;
+      text-align: center;
+    }}
+
+    .card-main {{ flex: 1; min-width: 0; }}
+    .card-name {{
+      font-size: .95em;
+      font-weight: 600;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      color: #1a1a2e;
+    }}
+    .card-meta {{
+      font-size: .78em;
+      color: #888;
+      margin-top: 3px;
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }}
+
+    .eth-badge {{
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 20px;
+      font-size: .72em;
+      font-weight: 700;
+      color: white;
+      white-space: nowrap;
+    }}
+
+    .chevron {{
+      font-size: .8em;
+      color: #ccc;
+      transition: transform .25s;
+      min-width: 16px;
+    }}
+    .card.open .chevron {{ transform: rotate(180deg); }}
+
+    /* ── Expanded detail ── */
+    .card-detail {{
+      display: none;
+      padding: 0 14px 14px 48px;
+      font-size: .84em;
+      color: #555;
+      border-top: 1px solid #f0f0f0;
+    }}
+    .card.open .card-detail {{ display: block; padding-top: 12px; }}
+
+    .detail-row {{
+      display: flex;
+      gap: 8px;
+      margin-bottom: 6px;
+      align-items: flex-start;
+    }}
+    .detail-label {{
+      color: #aaa;
+      min-width: 64px;
+      font-size: .88em;
+      padding-top: 1px;
+    }}
+    .detail-value {{ color: #333; font-weight: 500; }}
+
+    .score-dots {{
+      display: flex;
+      gap: 4px;
+      margin-top: 10px;
+      padding-top: 10px;
+      border-top: 1px solid #f0f0f0;
+    }}
+    .dot {{
+      width: 10px; height: 10px;
+      border-radius: 50%;
+      background: #e0e0e0;
+    }}
+    .dot.filled {{ background: #1a73e8; }}
+    .score-label {{ font-size: .75em; color: #aaa; margin-left: 6px; align-self: center; }}
+
+    .nav-btn {{
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      margin-top: 12px;
+      padding: 7px 14px;
+      background: transparent;
+      color: #1a73e8;
+      border: 1px solid #d0d8e8;
+      border-radius: 8px;
+      font-size: .82em;
+      font-weight: 500;
+      text-decoration: none;
+      -webkit-tap-highlight-color: transparent;
+    }}
+    .nav-btn:active {{ opacity: .6; }}
+
+    /* ── Action buttons ── */
+    .actions {{
+      display: flex;
+      gap: 8px;
+      margin-top: 12px;
+      flex-wrap: wrap;
+    }}
+    .action-btn {{
+      flex: 1;
+      min-width: 80px;
+      padding: 8px 6px;
+      border-radius: 8px;
+      font-size: .78em;
+      font-weight: 600;
+      border: 1px solid #e0e0e0;
+      background: white;
+      color: #555;
+      cursor: pointer;
+      text-align: center;
+      -webkit-tap-highlight-color: transparent;
+      transition: all .15s;
+    }}
+    .action-btn.visited  {{ background: #eafaf1; border-color: #27ae60; color: #27ae60; }}
+    .action-btn.interested {{ background: #fef9e7; border-color: #f39c12; color: #e67e22; }}
+
+    /* ── Note textarea ── */
+    .note-area {{
+      width: 100%;
+      margin-top: 10px;
+      padding: 8px 10px;
+      border: 1px solid #e0e0e0;
+      border-radius: 8px;
+      font-size: .82em;
+      font-family: inherit;
+      color: #333;
+      resize: none;
+      min-height: 60px;
+      display: none;
+    }}
+    .note-area.visible {{ display: block; }}
+    .note-save {{
+      margin-top: 6px;
+      padding: 6px 14px;
+      background: #f0f0f0;
+      border: none;
+      border-radius: 6px;
+      font-size: .78em;
+      font-weight: 600;
+      color: #555;
+      cursor: pointer;
+      display: none;
+    }}
+    .note-save.visible {{ display: inline-block; }}
+    .note-saved-text {{
+      font-size: .78em;
+      color: #aaa;
+      margin-top: 6px;
+      display: none;
+    }}
+
+    /* ── Updated stamp ── */
+    .updated {{
+      text-align: center;
+      font-size: .72em;
+      color: #bbb;
+      padding: 8px;
+    }}
+
+    /* ── Footnotes ── */
+    .footnotes {{
+      padding: 0 16px 24px;
+      font-size: .74em;
+      color: #aaa;
+      line-height: 1.7;
+    }}
+    .footnotes p {{ margin-bottom: 4px; }}
+
+    /* ── Empty state ── */
+    .empty {{
+      text-align: center;
+      color: #bbb;
+      padding: 40px 16px;
+      font-size: .9em;
+    }}
   </style>
 </head>
 <body>
+
 <header>
-  <h1>⛪ OIC New Homeowner Outreach</h1>
-  <p>One In Christ Church &nbsp;·&nbsp; 1595 Turkey Foot Rd, Forest VA &nbsp;·&nbsp;
-     20-mile radius &nbsp;·&nbsp; Updated {now.strftime("%B %d, %Y")}</p>
+  <h1>⛪ OIC Outreach</h1>
+  <p>New homeowners within 20 miles · Updated {now.strftime("%b %d, %Y")}</p>
 </header>
-<div class="container">
-  <div class="scoring">{scoring_note}</div>
-  <div class="legend">
-    {''.join(f'<div class="leg-item"><div class="leg-dot" style="background:{c}"></div>{e}</div>' for e,c in ETH_COLOR.items())}
+
+<div class="followup-wrap" id="followup-wrap">
+  <div class="followup-header" onclick="toggleFollowUpSection()" style="cursor:pointer">
+    📌 Following Up <span id="followup-count"></span>
+    <span id="followup-chevron" style="font-size:.8em;color:#c4933f;margin-left:auto;transition:transform .25s;display:inline-block">▲</span>
   </div>
-  {table_html(t_month, f"Top 10 — {month_label}", "Scored within this calendar month only. Recency not included (all records are this month).")}
-  {table_html(t_year,  "Top 10 — Past 12 Months", "Best overall across the full year. Recency bonus (+1) applied for sales within past 30 days.")}
+  <div class="followup-cards" id="followup-cards"></div>
 </div>
-<footer>Data sourced from Bedford, Lynchburg, Campbell, Amherst &amp; Appomattox County GIS &nbsp;·&nbsp;
-Ethnicity estimated via surgeo BISG (Census surname model) &nbsp;·&nbsp;
-Refreshed weekly every Monday</footer>
+
+<div class="toggle-wrap">
+  <button class="toggle-btn active" id="btn-month" onclick="showView('month')">
+    This Month
+  </button>
+  <button class="toggle-btn" id="btn-year" onclick="showView('year')">
+    Past 12 Months
+  </button>
+</div>
+
+<p class="section-label" id="section-label">{month_label} · Top 10 priority households</p>
+
+<div class="cards" id="cards-container"></div>
+
+<div class="footnotes">
+  <p>¹ Ethnicity estimated from US Census surname data (BISG model) — not verified.</p>
+  <p>² "Origin unknown" means the mailing address was already updated to the new home, or county has no mailing data (Campbell).</p>
+  <p>³ Household size estimated from sqft where available (Lynchburg, Amherst), otherwise from sale price — treat as approximate.</p>
+  <p>⁴ Companies, LLCs, and confirmed local movers are excluded.</p>
+  <p>⁵ Priority score (max 8): ethnicity Asian/PI=+3, Hispanic/Black=+2, other=+1 · origin out-of-state=+2, in-state/unknown=+1 · distance ≤5mi=+2, ≤10mi=+1 · sold this month=+1.</p>
+</div>
+
+<script>
+const MONTH_DATA = {month_data};
+const YEAR_DATA  = {year_data};
+const MONTH_LABEL = "{month_label} · Top 10 priority households";
+const YEAR_LABEL  = "Past 12 months · Top 10 priority households";
+
+let currentView = 'month';
+
+function showView(view) {{
+  currentView = view;
+  document.getElementById('btn-month').classList.toggle('active', view === 'month');
+  document.getElementById('btn-year').classList.toggle('active', view  === 'year');
+  document.getElementById('section-label').textContent = view === 'month' ? MONTH_LABEL : YEAR_LABEL;
+  const data = view === 'month' ? MONTH_DATA : YEAR_DATA;
+  renderCards(data);
+  setTimeout(() => loadState(view, data), 50);
+}}
+
+function renderCards(data) {{
+  const container = document.getElementById('cards-container');
+  if (!data.length) {{
+    container.innerHTML = '<div class="empty">No records for this period.</div>';
+    return;
+  }}
+  container.innerHTML = data.map((r, i) => `
+    <div class="card" id="card-${{i}}" style="border-left-color:${{r.color}}" >
+      <div class="card-header" onclick="toggleCard(${{i}})">
+        <span class="rank">${{r.rank}}</span>
+        <div class="card-main">
+          <div class="card-name">${{r.name}}</div>
+          <div class="card-meta">
+            <span>${{r.dist}} mi · ${{r.county}}</span>
+            <span style="color:#aaa">·</span>
+            <span>${{r.date}}</span>
+          </div>
+        </div>
+        <span class="eth-badge" style="background:${{r.color}}">${{r.eth}}</span>
+        <span class="chevron">▼</span>
+      </div>
+      <div class="card-detail">
+        <div class="detail-row">
+          <span class="detail-label">Address</span>
+          <span class="detail-value">${{r.addr}}, ${{r.county}}</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">Origin</span>
+          <span class="detail-value">${{r.origin}}</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">Household</span>
+          <span class="detail-value">Est. ${{r.hh}} people</span>
+        </div>
+        <div class="score-dots">
+          ${{Array.from({{length: 8}}, (_, j) =>
+            `<div class="dot ${{j < r.score ? 'filled' : ''}}"></div>`
+          ).join('')}}
+          <span class="score-label">Priority score ${{r.score}}/8</span>
+        </div>
+        ${{r.nav ? `<a class="nav-btn" href="${{r.nav}}" target="_blank" rel="noopener">
+          📍 Navigate to address
+        </a>` : ''}}
+        <div class="actions">
+          <button class="action-btn" id="visited-${{i}}" onclick="toggleVisited(${{i}}, event)">❓ Visited</button>
+          <button class="action-btn" id="interested-${{i}}" onclick="toggleInterested(${{i}}, event)">❓ Follow Up?</button>
+          <button class="action-btn" onclick="toggleNote(${{i}}, event)">📝 Note</button>
+        </div>
+        <textarea class="note-area" id="note-${{i}}" placeholder="Add a note..." onchange="saveNote(${{i}})"></textarea>
+        <button class="note-save" id="note-save-${{i}}" onclick="saveNote(${{i}})">Save note</button>
+        <div class="note-saved-text" id="note-saved-${{i}}">✓ Saved</div>
+      </div>
+    </div>
+  `).join('');
+}}
+
+function toggleCard(i) {{
+  const card = document.getElementById('card-' + i);
+  card.classList.toggle('open');
+  // Re-apply gray only when collapsed and marked visited
+  const isOpen = card.classList.contains('open');
+  const isVisited = document.getElementById('visited-' + i)?.classList.contains('visited');
+  card.style.opacity = (!isOpen && isVisited) ? '0.45' : '1';
+}}
+
+// Collect all cards from both views (deduplicated by key)
+const ALL_CARDS = Object.values(
+  [...MONTH_DATA, ...YEAR_DATA].reduce((acc, c) => {{
+    const k = cardKey(null, c); acc[k] = c; return acc;
+  }}, {{}})
+);
+
+function renderFollowUp() {{
+  const interested = ALL_CARDS.filter(c => getState(c).interested);
+  const wrap  = document.getElementById('followup-wrap');
+  const count = document.getElementById('followup-count');
+  const cont  = document.getElementById('followup-cards');
+  if (!interested.length) {{ wrap.classList.remove('has-items'); return; }}
+  wrap.classList.add('has-items');
+  count.textContent = `(${{interested.length}})`;
+  cont.innerHTML = interested.map(r => `
+    <div class="card" id="fp-card-${{cardKey(null,r)}}" style="border-left-color:${{r.color}};margin-bottom:6px">
+      <div class="card-header" onclick="toggleFpCard('${{cardKey(null,r)}}')">
+        <div class="card-main">
+          <div class="card-name">${{r.name}}</div>
+          <div class="card-meta"><span>${{r.dist}} mi · ${{r.county}}</span><span style="color:#aaa">·</span><span>${{r.date}}</span></div>
+        </div>
+        <span class="eth-badge" style="background:${{r.color}}">${{r.eth}}</span>
+        <span class="chevron">▼</span>
+      </div>
+      <div class="card-detail">
+        <div class="detail-row"><span class="detail-label">Address</span><span class="detail-value">${{r.addr}}, ${{r.county}}</span></div>
+        <div class="detail-row"><span class="detail-label">Origin</span><span class="detail-value">${{r.origin}}</span></div>
+        ${{(function() {{
+          const key = cardKey(null, r);
+          const note = getState(r).note || '';
+          return `<div class="detail-row" style="flex-direction:column;gap:4px">
+            <span class="detail-label">Note</span>
+            <textarea class="note-area visible" id="fp-note-${{key}}"
+              style="margin-top:4px"
+              placeholder="Add a note..."
+              onchange="saveFpNote('${{key}}')"
+              oninput="saveFpNote('${{key}}')"
+            >${{note}}</textarea>
+          </div>`;
+        }})()}}
+        ${{r.nav ? `<a class="nav-btn" href="${{r.nav}}" target="_blank" rel="noopener">📍 Navigate to address</a>` : ''}}
+        <div style="margin-top:10px">
+          <button style="font-size:.78em;color:#c0392b;background:none;border:1px solid #eaa;border-radius:6px;padding:5px 10px;cursor:pointer"
+            onclick="removeFollowUp('${{cardKey(null,r)}}', event)">✕ Remove from Following Up</button>
+        </div>
+      </div>
+    </div>
+  `).join('');
+}}
+
+function toggleFpCard(key) {{
+  document.getElementById('fp-card-' + key)?.classList.toggle('open');
+}}
+
+function toggleFollowUpSection() {{
+  const cards = document.getElementById('followup-cards');
+  const chevron = document.getElementById('followup-chevron');
+  const collapsed = cards.style.display === 'none';
+  cards.style.display = collapsed ? '' : 'none';
+  chevron.style.transform = collapsed ? '' : 'rotate(180deg)';
+}}
+
+function saveFpNote(key) {{
+  const val = document.getElementById('fp-note-' + key)?.value || '';
+  const stored = JSON.parse(localStorage.getItem(key) || '{{}}');
+  localStorage.setItem(key, JSON.stringify({{...stored, note: val}}));
+  // Sync to matching main list textarea if it exists in current view
+  const data = currentView === 'month' ? MONTH_DATA : YEAR_DATA;
+  data.forEach((r, i) => {{
+    if (cardKey(null, r) === key) {{
+      const mainTA = document.getElementById('note-' + i);
+      if (mainTA && mainTA.value !== val) mainTA.value = val;
+    }}
+  }});
+}}
+
+function removeFollowUp(key, e) {{
+  e.stopPropagation();
+  const stored = JSON.parse(localStorage.getItem(key) || '{{}}');
+  localStorage.setItem(key, JSON.stringify({{...stored, interested: false}}));
+  // Also update the button in the main list if visible
+  ALL_CARDS.forEach((c, idx) => {{
+    if (cardKey(null,c) === key) {{
+      ['month','year'].forEach(v => {{
+        const data = v === 'month' ? MONTH_DATA : YEAR_DATA;
+        data.forEach((r, i) => {{
+          if (cardKey(null,r) === key) {{
+            const btn = document.getElementById('interested-' + i);
+            if (btn) {{ btn.classList.remove('interested'); btn.textContent = '❓ Follow Up?'; }}
+          }}
+        }});
+      }});
+    }}
+  }});
+  renderFollowUp();
+}}
+
+function cardKey(view, card) {{
+  // owner + sale date + coords — unique per transaction even if address resells
+  const name = card.name.replace(/[^a-z0-9]/gi,'').toLowerCase().slice(0,12);
+  const date = card.date.replace(/[^0-9]/g,'');
+  return `oic-${{name}}-${{date}}-${{card.lat.toFixed(3)}}-${{card.lon.toFixed(3)}}`;
+}}
+
+function loadState(view, data) {{
+  data.forEach((r, i) => {{
+    const state = getState(r);
+    if (state.visited) {{
+      const btn = document.getElementById('visited-' + i);
+      if (btn) {{ btn.classList.add('visited'); btn.textContent = '✅ Visited'; }}
+      const card = document.getElementById('card-' + i);
+      if (card && !card.classList.contains('open')) card.style.opacity = '0.45';
+    }}
+    if (state.interested) {{
+      const btn = document.getElementById('interested-' + i);
+      if (btn) {{ btn.classList.add('interested'); btn.textContent = '📌 Following Up'; }}
+    }}
+    if (state.note) {{
+      const ta = document.getElementById('note-' + i);
+      if (ta) {{ ta.value = state.note; ta.classList.add('visible'); }}
+      const btn = document.getElementById('note-save-' + i);
+      if (btn) btn.classList.add('visible');
+    }}
+  }});
+}}
+
+function getState(card) {{
+  return JSON.parse(localStorage.getItem(cardKey(null, card)) || '{{}}');
+}}
+function setState(card, patch) {{
+  const s = getState(card);
+  localStorage.setItem(cardKey(null, card), JSON.stringify({{...s, ...patch}}));
+}}
+
+function toggleVisited(i, e) {{
+  e.stopPropagation();
+  const btn = document.getElementById('visited-' + i);
+  const active = btn.classList.toggle('visited');
+  btn.textContent = active ? '✅ Visited' : '❓ Visited';
+  const data = currentView === 'month' ? MONTH_DATA : YEAR_DATA;
+  setState(data[i], {{visited: active}});
+  // Gray out only if card is collapsed
+  const card = document.getElementById('card-' + i);
+  const isOpen = card.classList.contains('open');
+  card.style.opacity = (active && !isOpen) ? '0.45' : '1';
+}}
+
+function toggleInterested(i, e) {{
+  e.stopPropagation();
+  const btn = document.getElementById('interested-' + i);
+  const active = btn.classList.toggle('interested');
+  btn.textContent = active ? '📌 Following Up' : '❓ Follow Up?';
+  const data = currentView === 'month' ? MONTH_DATA : YEAR_DATA;
+  setState(data[i], {{interested: active}});
+  renderFollowUp();
+}}
+
+function toggleNote(i, e) {{
+  e.stopPropagation();
+  document.getElementById('note-' + i).classList.toggle('visible');
+  document.getElementById('note-save-' + i).classList.toggle('visible');
+  document.getElementById('note-' + i).focus();
+}}
+
+function saveNote(i) {{
+  const val = document.getElementById('note-' + i).value;
+  const data = currentView === 'month' ? MONTH_DATA : YEAR_DATA;
+  setState(data[i], {{note: val}});
+  // Sync to Following Up textarea if present
+  const key = cardKey(null, data[i]);
+  const fpTA = document.getElementById('fp-note-' + key);
+  if (fpTA && fpTA.value !== val) fpTA.value = val;
+  const saved = document.getElementById('note-saved-' + i);
+  saved.style.display = 'block';
+  setTimeout(() => saved.style.display = 'none', 1500);
+}}
+
+// Init
+renderCards(MONTH_DATA);
+setTimeout(() => {{ loadState('month', MONTH_DATA); renderFollowUp(); }}, 50);
+</script>
+
 </body>
 </html>"""
 
