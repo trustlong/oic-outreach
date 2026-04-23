@@ -128,13 +128,6 @@ def build_html(t_month, t_year, now, month_label):
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
-  <!-- Google Tag Manager -->
-  <script>(function(w,d,s,l,i){{w[l]=w[l]||[];w[l].push({{'gtm.start':
-  new Date().getTime(),event:'gtm.js'}});var f=d.getElementsByTagName(s)[0],
-  j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
-  'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
-  }})(window,document,'script','dataLayer','GTM-TXCLJ8QJ');</script>
-  <!-- End Google Tag Manager -->
   <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-810DPNWNQM"></script>
   <script>
@@ -429,11 +422,6 @@ def build_html(t_month, t_year, now, month_label):
   </style>
 </head>
 <body>
-  <!-- Google Tag Manager (noscript) -->
-  <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-TXCLJ8QJ"
-  height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
-  <!-- End Google Tag Manager (noscript) -->
-
 <header>
   <h1>⛪ OIC Outreach</h1>
   <p>New homeowners within 20 miles · Updated {now.strftime("%b %d, %Y")}</p>
@@ -485,8 +473,7 @@ function showView(view) {{
   const data = view === 'month' ? MONTH_DATA : YEAR_DATA;
   renderCards(data);
   setTimeout(() => loadState(view, data), 50);
-  window.dataLayer = window.dataLayer || [];
-  window.dataLayer.push({{ event: 'view_switch', view: view }});
+  gtag('event', 'view_switch', {{ view: view }});
 }}
 
 function renderCards(data) {{
@@ -529,7 +516,7 @@ function renderCards(data) {{
           ).join('')}}
           <span class="score-label">Priority score ${{r.score}}/8</span>
         </div>
-        ${{r.nav ? `<a class="nav-btn" href="${{r.nav}}" target="_blank" rel="noopener" onclick="(function(){{window.dataLayer=window.dataLayer||[];window.dataLayer.push({{event:'navigate_address',ethnicity:'${{r.eth}}',county:'${{r.county}}'}})}})()" >
+        ${{r.nav ? `<a class="nav-btn" href="${{r.nav}}" target="_blank" rel="noopener" onclick="gtag('event','navigate_address',{{ethnicity:'${{r.eth}}',county:'${{r.county}}'}})" >
           📍 Navigate to address
         </a>` : ''}}
         <div class="actions">
@@ -640,8 +627,7 @@ function removeFollowUp(key, e) {{
   e.stopPropagation();
   const stored = JSON.parse(localStorage.getItem(key) || '{{}}');
   localStorage.setItem(key, JSON.stringify({{...stored, interested: false}}));
-  window.dataLayer = window.dataLayer || [];
-  window.dataLayer.push({{ event: 'remove_follow_up' }});
+  gtag('event', 'remove_follow_up');
   // Also update the button in the main list if visible
   ALL_CARDS.forEach((c, idx) => {{
     if (cardKey(null,c) === key) {{
@@ -703,8 +689,7 @@ function toggleVisited(i, e) {{
   btn.textContent = active ? '✅ Visited' : '❓ Visited';
   const data = currentView === 'month' ? MONTH_DATA : YEAR_DATA;
   setState(data[i], {{visited: active}});
-  window.dataLayer = window.dataLayer || [];
-  window.dataLayer.push({{ event: 'mark_visited', status: active ? 'visited' : 'unvisited', ethnicity: data[i].eth, county: data[i].county }});
+  gtag('event', 'mark_visited', {{ status: active ? 'visited' : 'unvisited', ethnicity: data[i].eth, county: data[i].county }});
   // Gray out only if card is collapsed
   const card = document.getElementById('card-' + i);
   const isOpen = card.classList.contains('open');
@@ -718,8 +703,7 @@ function toggleInterested(i, e) {{
   btn.textContent = active ? '📌 Following Up' : '❓ Follow Up?';
   const data = currentView === 'month' ? MONTH_DATA : YEAR_DATA;
   setState(data[i], {{interested: active}});
-  window.dataLayer = window.dataLayer || [];
-  window.dataLayer.push({{ event: 'mark_follow_up', status: active ? 'following' : 'unfollowing', ethnicity: data[i].eth, county: data[i].county }});
+  gtag('event', 'mark_follow_up', {{ status: active ? 'following' : 'unfollowing', ethnicity: data[i].eth, county: data[i].county }});
   renderFollowUp();
 }}
 
@@ -734,8 +718,7 @@ function saveNote(i) {{
   const val = document.getElementById('note-' + i).value;
   const data = currentView === 'month' ? MONTH_DATA : YEAR_DATA;
   setState(data[i], {{note: val}});
-  window.dataLayer = window.dataLayer || [];
-  window.dataLayer.push({{ event: 'save_note' }});
+  gtag('event', 'save_note');
   // Sync to Following Up textarea if present
   const key = cardKey(null, data[i]);
   const fpTA = document.getElementById('fp-note-' + key);
