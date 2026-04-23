@@ -388,7 +388,7 @@ function renderCards(data) {
           <button class="action-btn" id="interested-${i}" onclick="toggleInterested(${i}, event)">❓ Follow Up?</button>
           <button class="action-btn" onclick="toggleNote(${i}, event)">📝 Note</button>
         </div>
-        <textarea class="note-area" id="note-${i}" placeholder="Add a note..." onchange="saveNote(${i})"></textarea>
+        <textarea class="note-area" id="note-${i}" placeholder="Add a note..." oninput="saveNote(${i})" onchange="saveNote(${i})"></textarea>
         <button class="note-save" id="note-save-${i}" onclick="saveNote(${i})">Save note</button>
         <div class="note-saved-text" id="note-saved-${i}">✓ Saved</div>
       </div>
@@ -441,9 +441,11 @@ function renderFollowUp() {
             <textarea class="note-area visible" id="fp-note-${key}"
               style="margin-top:4px"
               placeholder="Add a note..."
-              onchange="saveFpNote('${key}')"
               oninput="saveFpNote('${key}')"
+              onchange="saveFpNote('${key}')"
             >${note}</textarea>
+            <button class="note-save visible" onclick="saveFpNote('${key}')">Save note</button>
+            <div class="note-saved-text" id="fp-note-saved-${key}">✓ Saved</div>
           </div>`;
         })()}
         ${r.nav ? `<a class="nav-btn" href="${r.nav}" target="_blank" rel="noopener">📍 Navigate to address</a>` : ''}
@@ -480,6 +482,9 @@ function saveFpNote(key) {
       if (mainTA && mainTA.value !== val) mainTA.value = val;
     }
   });
+  // Flash saved confirmation
+  const saved = document.getElementById('fp-note-saved-' + key);
+  if (saved) { saved.style.display = 'block'; setTimeout(() => saved.style.display = 'none', 1500); }
 }
 
 function removeFollowUp(key, e) {
