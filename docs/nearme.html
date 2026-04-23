@@ -99,6 +99,28 @@
 
     .footnotes { padding: 0 16px 24px; font-size: .74em; color: #aaa; line-height: 1.7; }
     .footnotes p { margin-bottom: 4px; }
+
+    /* ── Following Up section ── */
+    .followup-wrap {
+      display: none;
+      margin: 0 12px 4px;
+      background: #fff8ee;
+      border: 1px solid #f5d78e;
+      border-radius: 12px;
+      overflow: hidden;
+    }
+    .followup-wrap.has-items { display: block; }
+    .followup-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 14px 6px;
+      font-size: .82em;
+      font-weight: 700;
+      color: #b7791f;
+    }
+    .followup-header span { font-weight: 400; color: #c4933f; font-size: .9em; }
+    .followup-cards { padding: 0 8px 8px; }
   </style>
 </head>
 <body>
@@ -124,6 +146,13 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
   <button id="btn-365" onclick="switchPeriod(365)" style="flex:1;max-width:160px;padding:9px 0;font-size:.85em;font-weight:600;border:2px solid #1a73e8;border-radius:0 8px 8px 0;background:white;color:#1a73e8;cursor:pointer">Last year</button>
 </div>
 <p class="section-label" id="section-label" style="display:none"></p>
+<div class="followup-wrap" id="followup-wrap">
+  <div class="followup-header" onclick="toggleFollowUpSection()" style="cursor:pointer">
+    📌 Following Up <span id="followup-count"></span>
+    <span id="followup-chevron" style="font-size:.8em;color:#c4933f;margin-left:auto;transition:transform .25s;display:inline-block">▲</span>
+  </div>
+  <div class="followup-cards" id="followup-cards"></div>
+</div>
 <div class="cards" id="cards-container"></div>
 <div class="footnotes" id="footnotes" style="display:none">
   <p>¹ Distance shown from your current location, not OIC church.</p>
@@ -298,6 +327,85 @@ function toggleInterested(i, e) {
   const active = btn.classList.toggle('interested');
   btn.textContent = active ? '📌 Following Up' : '❓ Follow Up?';
   setState(top10Cache[i].r, {interested: active});
+  renderFollowUp();
+}
+
+function renderFollowUp() {
+  const wrap  = document.getElementById('followup-wrap');
+  const count = document.getElementById('followup-count');
+  const cont  = document.getElementById('followup-cards');
+  const interested = allRecords.filter(r => getState(r).interested);
+  if (!interested.length) { wrap.classList.remove('has-items'); return; }
+  wrap.classList.add('has-items');
+  count.textContent = `(${interested.length})`;
+  cont.innerHTML = interested.map(r => {
+    const eth   = r.ESTIMATED_ETHNICITY || 'Unknown';
+    const color = ETH_COLOR[eth] || '#95a5a6';
+    const key   = cardKey(r);
+    const note  = getState(r).note || '';
+    const nav   = (r.LAT && r.LON) ? `https://maps.google.com/?q=${parseFloat(r.LAT)},${parseFloat(r.LON)}` : '';
+    const addr  = (r.LocAddr||'').replace(/^\d+\.0\s*/,'').trim() || 'Address on file';
+    return `
+    <div class="card" id="fp-card-${key}" style="border-left-color:${color};margin-bottom:6px">
+      <div class="card-header" onclick="toggleFpCard('${key}')">
+        <div class="card-main">
+          <div class="card-name">${fmtName(r.Owner1||'')}</div>
+          <div class="card-meta"><span>${r.SOURCE||''}</span><span style="color:#aaa">·</span><span>${r.Sale1D||''}</span></div>
+        </div>
+        <span class="eth-badge" style="background:${color}">${eth}</span>
+        <span class="chevron">▼</span>
+      </div>
+      <div class="card-detail">
+        <div class="detail-row"><span class="detail-label">Address</span><span class="detail-value">${addr}, ${r.SOURCE||''}</span></div>
+        <div class="detail-row"><span class="detail-label">Origin</span><span class="detail-value">${fmtOrigin(r.MOVE_ORIGIN||'')}</span></div>
+        <div class="detail-row" style="flex-direction:column;gap:4px">
+          <span class="detail-label">Note</span>
+          <textarea class="note-area visible" id="fp-note-${key}" style="margin-top:4px" placeholder="Add a note..."
+            oninput="saveFpNote('${key}')" onchange="saveFpNote('${key}')">${note}</textarea>
+          <button class="note-save visible" onclick="saveFpNote('${key}')">Save note</button>
+          <div class="note-saved-text" id="fp-note-saved-${key}">✓ Saved</div>
+        </div>
+        ${nav ? `<a class="nav-btn" href="${nav}" target="_blank" rel="noopener">📍 Navigate to address</a>` : ''}
+        <div style="margin-top:10px">
+          <button style="font-size:.78em;color:#c0392b;background:none;border:1px solid #eaa;border-radius:6px;padding:5px 10px;cursor:pointer"
+            onclick="removeFollowUp('${key}', event)">✕ Remove from Following Up</button>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function toggleFpCard(key) {
+  document.getElementById('fp-card-' + key)?.classList.toggle('open');
+}
+
+function toggleFollowUpSection() {
+  const cards = document.getElementById('followup-cards');
+  const chevron = document.getElementById('followup-chevron');
+  const collapsed = cards.style.display === 'none';
+  cards.style.display = collapsed ? '' : 'none';
+  chevron.style.transform = collapsed ? '' : 'rotate(180deg)';
+}
+
+function saveFpNote(key) {
+  const val = document.getElementById('fp-note-' + key)?.value || '';
+  const stored = JSON.parse(localStorage.getItem(key) || '{}');
+  localStorage.setItem(key, JSON.stringify({...stored, note: val}));
+  const saved = document.getElementById('fp-note-saved-' + key);
+  if (saved) { saved.style.display = 'block'; setTimeout(() => saved.style.display = 'none', 1500); }
+}
+
+function removeFollowUp(key, e) {
+  e.stopPropagation();
+  const stored = JSON.parse(localStorage.getItem(key) || '{}');
+  localStorage.setItem(key, JSON.stringify({...stored, interested: false}));
+  top10Cache.forEach((item, i) => {
+    if (cardKey(item.r) === key) {
+      const btn = document.getElementById('nm-interested-' + i);
+      if (btn) { btn.classList.remove('interested'); btn.textContent = '❓ Follow Up?'; }
+    }
+  });
+  renderFollowUp();
 }
 
 function toggleNote(i, e) {
@@ -352,6 +460,7 @@ function showTop10(uLat, uLon) {
   document.getElementById('period-toggle').style.display = 'flex';
   document.getElementById('footnotes').style.display = '';
   renderCards(scored);
+  renderFollowUp();
 }
 
 function parseDate(s) {
