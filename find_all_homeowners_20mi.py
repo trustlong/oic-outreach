@@ -262,6 +262,64 @@ def estimate_hh(sqft, price):
     if p < 750000:   return 3, f"price=${int(p):,}"
     return 3, f"price=${int(p):,}"
 
+# ── Chinese full-name detection ────────────────────────────────────────────────
+
+CHINESE_SURNAMES = {
+    "CHEN","WANG","LI","ZHANG","LIU","YANG","HUANG","ZHAO","WU","ZHOU","SUN",
+    "MA","GUO","HE","LIN","TANG","CHANG","TSE","CHENG","ZHENG","YE","LAM",
+    "LEUNG","CHEUNG","KWOK","NG","HO","CHAN","LIANG","TSAI","DU","WEI","JIN",
+    "CHIANG","CHIEN","CHIN","CHIU","CHOU","CHU","HSIAO","HSIEH","HSU","HSIA",
+    "KAO","KUO","LAI","LO","SUNG","TENG","TSAO","TSENG","TSUI","TUNG","WONG",
+    "YEH","KWONG","CAI","CAO","CUI","DENG","DING","DONG","FAN","FANG","FENG",
+    "GAO","GONG","HAN","HOU","HU","JIANG","KONG","LU","LUO","MEI","MO","PAN",
+    "PENG","QIAN","SHAO","SHEN","SHI","SONG","SU","TAO","XIAO","XIE","XU",
+    "XUE","YAN","YAO","ZOU","ZENG","ZHU","BAI","FU",
+}
+
+_ENGLISH_NAMES = {
+    "WILLIAM","JAMES","JOHN","ROBERT","MICHAEL","DAVID","JOSEPH","THOMAS",
+    "CHARLES","CHRISTOPHER","DANIEL","MATTHEW","ANDREW","JOSHUA","RYAN",
+    "KEVIN","BRIAN","ERIC","JASON","JEFFREY","TIMOTHY","GARY","STEPHEN",
+    "MARK","PAUL","GEORGE","DONALD","KENNETH","LARRY","FRANK","SCOTT",
+    "RAYMOND","JERRY","DENNIS","WALTER","PATRICK","PETER","HAROLD","DOUGLAS",
+    "HENRY","CARL","ARTHUR","ROGER","RALPH","WAYNE","ROY","LOUIS","PHILLIP",
+    "MARY","PATRICIA","LINDA","BARBARA","ELIZABETH","JENNIFER","MARIA","SUSAN",
+    "MARGARET","DOROTHY","LISA","NANCY","KAREN","BETTY","HELEN","SANDRA",
+    "DONNA","CAROL","RUTH","SHARON","MICHELLE","LAURA","SARAH","KIMBERLY",
+    "DEBORAH","JESSICA","SHIRLEY","CYNTHIA","ANGELA","MELISSA","BRENDA","AMY",
+    "ANNA","VIRGINIA","REBECCA","KATHLEEN","PAMELA","MARTHA","AMANDA",
+    "STEPHANIE","CAROLYN","DIANE","JANET","ALICE","JULIE","HEATHER","TERESA",
+    "WENDY","MANDY","CINDY","SANDY","DIANA","EMILY","GRACE","VICTOR","ALBERT",
+    "EDWARD","BENJAMIN","AUSTIN","TYLER","JUSTIN","TRAVIS","BRANDON","DEREK",
+    "KYLE","OLIVER","JEAN","LOUIS","DEBRA","NATHAN","JESSICA","ASHLEY",
+}
+
+_SKIP = {"TRS","TR","JR","SR","II","III","IV","LLC","INC","AND","&","ET","AL"}
+
+def _given_looks_chinese(given):
+    if not given: return False
+    tokens = given.upper().split()
+    meaningful = [t for t in tokens if len(t) > 1 and t not in _SKIP]
+    if not meaningful: return False
+    return not all(t in _ENGLISH_NAMES for t in meaningful)
+
+def is_chinese_fullname(owner1):
+    if not isinstance(owner1, str): return False
+    raw = owner1.strip()
+    parts = [p.strip() for p in raw.replace(" AND "," & ").split("&")]
+    for part in parts:
+        if "," in part:
+            chunks = [c.strip() for c in part.split(",", 1)]
+            surname, given = chunks[0].upper().split()[0] if chunks[0].strip() else "", chunks[1].upper() if len(chunks) > 1 else ""
+        else:
+            tokens = part.split()
+            surname = tokens[0].upper() if tokens else ""
+            given   = " ".join(tokens[1:]).upper()
+        if surname in CHINESE_SURNAMES and _given_looks_chinese(given):
+            return True
+    return False
+
+
 RACE_MAP = {"white":"White","black":"Black","api":"Asian/PI","native":"Am.Indian","multiple":"Multiracial","hispanic":"Hispanic"}
 RACE_COLS = list(RACE_MAP.keys())
 
@@ -290,6 +348,7 @@ def add_ethnicity(df):
 
     df["ESTIMATED_ETHNICITY"]  = eth
     df["ETHNICITY_CONFIDENCE"] = conf
+    df["IS_CHINESE"] = df["Owner1"].apply(is_chinese_fullname)
     return df
 
 # ── Split into layers ──────────────────────────────────────────────────────────
@@ -358,7 +417,7 @@ def main():
     # Clean up columns
     keep = ["DISTANCE_MILES","LAT","LON","SOURCE","Owner1","LocAddr",
             "SALE_DATE_STR","SalePrice","MOVE_ORIGIN",
-            "ESTIMATED_ETHNICITY","ETHNICITY_CONFIDENCE",
+            "ESTIMATED_ETHNICITY","ETHNICITY_CONFIDENCE","IS_CHINESE",
             "EST_HOUSEHOLD_SIZE","HH_SIZE_BASIS",
             "MailCity_src","MailStat_src"]
     keep = [c for c in keep if c in df.columns]

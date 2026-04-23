@@ -35,17 +35,21 @@ def parse_date(s):
         except: pass
     return None
 
-def score(row, include_recency=True, cutoff_30=None):
-    eth    = str(row.get("ESTIMATED_ETHNICITY", ""))
-    origin = str(row.get("MOVE_ORIGIN", ""))
-    dist   = float(row.get("DISTANCE_MILES", 99))
-    dt     = row.get("_dt")
-    s  = {"Asian/PI": 3, "Hispanic": 2, "Black": 2}.get(eth, 1)
-    s += 2 if origin.startswith("Out-of-state") else 1
-    s += 2 if dist <= 5 else (1 if dist <= 10 else 0)
-    if include_recency and cutoff_30 and dt and dt >= cutoff_30:
-        s += 1
-    return s
+def score(row, include_recency=False, cutoff_30=None):
+    eth       = str(row.get("ESTIMATED_ETHNICITY", ""))
+    origin    = str(row.get("MOVE_ORIGIN", ""))
+    dist      = float(row.get("DISTANCE_MILES", 99))
+    is_cn     = str(row.get("IS_CHINESE", "")).lower() in ("true", "1")
+
+    # Ethnicity: Chinese=3, other Asian=2, Hispanic/Black=1, White/Unknown=0
+    if is_cn:                               eth_s = 3
+    elif eth == "Asian/PI":                 eth_s = 2
+    elif eth in ("Hispanic", "Black"):      eth_s = 1
+    else:                                   eth_s = 0
+
+    ori_s = 2 if origin.startswith("Out-of-state") else 1
+    dis_s = 2 if dist <= 5 else (1 if dist <= 10 else 0)
+    return eth_s + ori_s + dis_s
 
 def load_and_clean():
     df = pd.read_csv(INPUT_FILE, dtype=str)
@@ -442,7 +446,7 @@ def build_html(t_month, t_year, now, month_label):
   <p>² "Origin unknown" means the mailing address was already updated to the new home, or county has no mailing data (Campbell).</p>
   <p>³ Household size estimated from sqft where available (Lynchburg, Amherst), otherwise from sale price — treat as approximate.</p>
   <p>⁴ Companies, LLCs, and confirmed local movers are excluded.</p>
-  <p>⁵ Priority score (max 8): ethnicity Asian/PI=+3, Hispanic/Black=+2, other=+1 · origin out-of-state=+2, in-state/unknown=+1 · distance ≤5mi=+2, ≤10mi=+1 · sold this month=+1.</p>
+  <p>⁵ Priority score (max 7): ethnicity Chinese=+3, other Asian=+2, Hispanic/Black=+1, White/Unknown=+0 · origin out-of-state=+2, in-state/unknown=+1 · distance ≤5mi=+2, ≤10mi=+1.</p>
 </div>
 
 <script>

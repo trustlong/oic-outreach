@@ -31,18 +31,20 @@ def parse_date(s):
         except: pass
     return None
 
-def score_row(row, cutoff_30):
-    eth = str(row.get("ESTIMATED_ETHNICITY", ""))
+def score_row(row, cutoff_30=None):
+    eth    = str(row.get("ESTIMATED_ETHNICITY", ""))
     origin = str(row.get("MOVE_ORIGIN", ""))
-    dist = float(row.get("DISTANCE_MILES", 99))
-    dt = row.get("_dt")
+    dist   = float(row.get("DISTANCE_MILES", 99))
+    is_cn  = str(row.get("IS_CHINESE", "")).lower() in ("true", "1")
 
-    eth_score = {"Asian/PI": 3, "Hispanic": 2, "Black": 2}.get(eth, 1)
+    if is_cn:                              eth_score = 3
+    elif eth == "Asian/PI":                eth_score = 2
+    elif eth in ("Hispanic", "Black"):     eth_score = 1
+    else:                                  eth_score = 0
+
     ori_score = 2 if origin.startswith("Out-of-state") else 1
     dis_score = 2 if dist <= 5 else (1 if dist <= 10 else 0)
-    rec_score = 1 if dt and dt >= cutoff_30 else 0
-
-    return eth_score + ori_score + dis_score + rec_score
+    return eth_score + ori_score + dis_score
 
 def main():
     df = pd.read_csv(INPUT_FILE, dtype=str)
@@ -51,8 +53,7 @@ def main():
     df = df[~df["Owner1"].apply(lambda x: bool(ENTITY_RE.search(str(x))))].copy()
     df = df[~df["MOVE_ORIGIN"].isin(["Local"])].copy()
 
-    cutoff_30 = datetime.now() - timedelta(days=30)
-    df["SCORE"] = df.apply(lambda r: score_row(r, cutoff_30), axis=1)
+    df["SCORE"] = df.apply(score_row, axis=1)
 
     top10 = (df.sort_values(["SCORE", "DISTANCE_MILES"], ascending=[False, True])
                .head(10)
