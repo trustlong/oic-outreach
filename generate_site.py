@@ -721,6 +721,12 @@ renderCards(MONTH_DATA);
 setTimeout(() => {{ loadState('month', MONTH_DATA); renderFollowUp(); }}, 50);
 </script>
 
+<footer style="text-align:center;padding:24px;font-size:.75em;color:#bbb;line-height:2">
+  Data from Bedford, Lynchburg, Campbell, Amherst &amp; Appomattox County GIS &nbsp;·&nbsp;
+  Ethnicity via surgeo BISG &nbsp;·&nbsp; Refreshed every Monday
+  <br><a href="disclaimer.html" style="color:#bbb">Disclaimer</a>
+</footer>
+
 </body>
 </html>"""
 
