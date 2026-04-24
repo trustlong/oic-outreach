@@ -1,3 +1,6 @@
+app/node_modules/
+app/public/all_homeowners_20mi.csv
+dist/
 .venv/
 __pycache__/
 *.pyc
