@@ -138,8 +138,8 @@
 </div>
 <div class="status" id="status"></div>
 <div id="period-toggle" style="display:none;justify-content:center;padding:0 16px 8px;gap:0">
-  <button id="btn-30"  onclick="switchPeriod(30)"  style="flex:1;max-width:160px;padding:9px 0;font-size:.85em;font-weight:600;border:2px solid #1a73e8;border-right:none;border-radius:8px 0 0 8px;background:#1a73e8;color:white;cursor:pointer">Last 30 days</button>
-  <button id="btn-365" onclick="switchPeriod(365)" style="flex:1;max-width:160px;padding:9px 0;font-size:.85em;font-weight:600;border:2px solid #1a73e8;border-radius:0 8px 8px 0;background:white;color:#1a73e8;cursor:pointer">Last year</button>
+  <button id="btn-month" onclick="switchPeriod('month')" style="flex:1;max-width:160px;padding:9px 0;font-size:.85em;font-weight:600;border:2px solid #1a73e8;border-right:none;border-radius:8px 0 0 8px;background:#1a73e8;color:white;cursor:pointer">Last Month</button>
+  <button id="btn-year"  onclick="switchPeriod('year')"  style="flex:1;max-width:160px;padding:9px 0;font-size:.85em;font-weight:600;border:2px solid #1a73e8;border-radius:0 8px 8px 0;background:white;color:#1a73e8;cursor:pointer">Last year</button>
 </div>
 <p class="section-label" id="section-label" style="display:none"></p>
 <div class="followup-wrap" id="followup-wrap">
@@ -288,15 +288,15 @@ function renderCards(top10) {
 }
 
 let top10Cache = [];
-let currentPeriod = 30;
+let currentPeriod = 'month';
 
-function switchPeriod(days) {
-  gtag('event', 'period_switch', { period: days });
-  currentPeriod = days;
-  document.getElementById('btn-30').style.background  = days === 30  ? '#1a73e8' : 'white';
-  document.getElementById('btn-30').style.color        = days === 30  ? 'white'   : '#1a73e8';
-  document.getElementById('btn-365').style.background = days === 365 ? '#1a73e8' : 'white';
-  document.getElementById('btn-365').style.color       = days === 365 ? 'white'   : '#1a73e8';
+function switchPeriod(period) {
+  gtag('event', 'period_switch', { period });
+  currentPeriod = period;
+  document.getElementById('btn-month').style.background = period === 'month' ? '#1a73e8' : 'white';
+  document.getElementById('btn-month').style.color      = period === 'month' ? 'white'   : '#1a73e8';
+  document.getElementById('btn-year').style.background  = period === 'year'  ? '#1a73e8' : 'white';
+  document.getElementById('btn-year').style.color       = period === 'year'  ? 'white'   : '#1a73e8';
   showTop10(userLat, userLon);
 }
 
@@ -437,14 +437,21 @@ async function loadCSV() {
 }
 
 function showTop10(uLat, uLon) {
-  const cutoff = new Date();
-  cutoff.setDate(cutoff.getDate() - currentPeriod);
+  let cutoffStart, cutoffEnd = null;
+  if (currentPeriod === 'month') {
+    const now = new Date();
+    cutoffEnd   = new Date(now.getFullYear(), now.getMonth(), 1);
+    cutoffStart = new Date(cutoffEnd.getFullYear(), cutoffEnd.getMonth() - 1, 1);
+  } else {
+    cutoffStart = new Date();
+    cutoffStart.setFullYear(cutoffStart.getFullYear() - 1);
+  }
 
   const scored = allRecords
     .filter(r => {
       if (isEntity(r.Owner1) || r.MOVE_ORIGIN === 'Local') return false;
       const d = parseDate(r.Sale1D);
-      return d && d >= cutoff;
+      return d && d >= cutoffStart && (cutoffEnd === null || d < cutoffEnd);
     })
     .map(r => { const s = scoreRecord(r, uLat, uLon); return s === -1 ? null : {r, score: s.score, dist: s.dist}; })
     .filter(Boolean)
@@ -454,7 +461,7 @@ function showTop10(uLat, uLon) {
   top10Cache = scored;
   const label = document.getElementById('section-label');
   label.style.display = '';
-  const periodLabel = currentPeriod === 30 ? 'past 30 days' : 'past year';
+  const periodLabel = currentPeriod === 'month' ? 'last month' : 'past year';
   label.textContent = scored.length
     ? `Top ${scored.length} near you · ${periodLabel}`
     : `No households found nearby (${periodLabel}) — try switching to Last year`;
