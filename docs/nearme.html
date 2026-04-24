@@ -34,6 +34,11 @@
     }
     .locate-btn:active { opacity: .8; }
     .locate-btn:disabled { background: #aaa; cursor: default; }
+    .locate-btn.small {
+      padding: 6px 12px; font-size: .78em; font-weight: 500;
+      background: transparent; color: #1a73e8;
+      border: 1px solid #d0d8e8; border-radius: 8px;
+    }
 
     .status { text-align: center; padding: 12px 16px; font-size: .85em; color: #888; }
 
@@ -230,7 +235,8 @@ async function locateMe() {
         setTimeout(() => {
           showTop10();
           setStatus('');
-          btn.textContent = '🔄 Refresh';
+          btn.textContent = '📍 Update location';
+          btn.classList.add('small');
           btn.disabled = false;
           btn.onclick = showTop10;
         }, 50);
