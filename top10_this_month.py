@@ -1,11 +1,14 @@
 """
 Monthly Top-10 Outreach Prioritizer for OIC.
 
+Filters to sales from last calendar month to account for Bedford County's
+~3 week data recording lag (by month-end, all sales are published).
+
 Scoring:
-  Ethnicity:  Asian/PI=3, Hispanic/Black=2, other=1
-  Origin:     Out-of-state=2, In-state/Unknown=1
-  Distance:   ≤5 mi=2, 5–10 mi=1, >10 mi=0
-  Recency:    Sold in past 30 days=1
+  Chinese name: 3, Other Asian/PI: 2, Hispanic/Black: 1, other: 0
+  Origin:       Out-of-state=2, In-state/Unknown=1
+  Distance:     ≤5 mi=2, 5–10 mi=1, >10 mi=0
+  Max score:    7
 
 Usage:
   python top10_this_month.py
@@ -14,6 +17,7 @@ Usage:
 import re
 import pandas as pd
 from datetime import datetime, timedelta
+from dateutil.relativedelta import relativedelta
 
 INPUT_FILE  = "all_homeowners_20mi.csv"
 OUTPUT_FILE = "top10_outreach.csv"
@@ -47,9 +51,16 @@ def score_row(row, cutoff_30=None):
     return eth_score + ori_score + dis_score
 
 def main():
+    today      = datetime.now()
+    last_month = today - relativedelta(months=1)
+    month_start = last_month.replace(day=1)
+    month_end   = today.replace(day=1)
+    label = last_month.strftime("%B %Y")
+
     df = pd.read_csv(INPUT_FILE, dtype=str)
     df["_dt"] = df["Sale1D"].apply(parse_date)
     df = df[df["_dt"].notna()].copy()
+    df = df[(df["_dt"] >= month_start) & (df["_dt"] < month_end)].copy()
     df = df[~df["Owner1"].apply(lambda x: bool(ENTITY_RE.search(str(x))))].copy()
     df = df[~df["MOVE_ORIGIN"].isin(["Local"])].copy()
 
@@ -67,7 +78,7 @@ def main():
     top10 = top10[keep]
     top10.to_csv(OUTPUT_FILE, index=False)
 
-    print(f"📋 Top 10 Outreach — {datetime.now().strftime('%B %Y')}\n")
+    print(f"📋 Top 10 Outreach — {label}\n")
     print(top10[["SCORE","DISTANCE_MILES","SOURCE","Owner1","LocAddr",
                  "Sale1D","ESTIMATED_ETHNICITY","MOVE_ORIGIN"]].to_string(index=False))
     print(f"\n✅ Saved → {OUTPUT_FILE}")

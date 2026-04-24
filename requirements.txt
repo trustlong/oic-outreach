@@ -2,3 +2,4 @@ pandas==3.0.2
 requests==2.33.1
 geopy==2.4.1
 surgeo==1.1.2
+python-dateutil>=2.8

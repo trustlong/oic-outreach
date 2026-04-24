@@ -438,7 +438,7 @@ def build_html(t_month, t_year, now, month_label):
 
 <div class="toggle-wrap">
   <button class="toggle-btn active" id="btn-month" onclick="showView('month')">
-    This Month
+    Last Month
   </button>
   <button class="toggle-btn" id="btn-year" onclick="showView('year')">
     Past 12 Months
@@ -745,9 +745,10 @@ setTimeout(() => {{ loadState('month', MONTH_DATA); renderFollowUp(); }}, 50);
 def main():
     now   = datetime.now()
     df    = load_and_clean()
-    t_month = top10_month(df, now.year, now.month)
+    last_month_end = now.replace(day=1) - timedelta(days=1)
+    t_month = top10_month(df, last_month_end.year, last_month_end.month)
     t_year  = top10_year(df)
-    month_label = now.strftime("%B %Y")
+    month_label = last_month_end.strftime("%B %Y")
     html = build_html(t_month, t_year, now, month_label)
     with open(OUT_FILE, "w", encoding="utf-8") as f:
         f.write(html)
