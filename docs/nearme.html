@@ -130,7 +130,7 @@ async function locateMe() {
         setTimeout(() => {
           showTop10();
           setStatus('');
-          document.getElementById('locate-btn').style.display = 'none';
+          document.querySelector('.locate-wrap').style.display = 'none';
         }, 50);
       },
       err => {
