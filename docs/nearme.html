@@ -139,7 +139,7 @@
 <div class="status" id="status"></div>
 <div id="period-toggle" style="display:none;justify-content:center;padding:0 16px 8px;gap:0">
   <button id="btn-month" onclick="switchPeriod('month')" style="flex:1;max-width:160px;padding:9px 0;font-size:.85em;font-weight:600;border:2px solid #1a73e8;border-right:none;border-radius:8px 0 0 8px;background:#1a73e8;color:white;cursor:pointer">Last Month</button>
-  <button id="btn-year"  onclick="switchPeriod('year')"  style="flex:1;max-width:160px;padding:9px 0;font-size:.85em;font-weight:600;border:2px solid #1a73e8;border-radius:0 8px 8px 0;background:white;color:#1a73e8;cursor:pointer">Last year</button>
+  <button id="btn-year"  onclick="switchPeriod('year')"  style="flex:1;max-width:160px;padding:9px 0;font-size:.85em;font-weight:600;border:2px solid #1a73e8;border-radius:0 8px 8px 0;background:white;color:#1a73e8;cursor:pointer">Past 12 Months</button>
 </div>
 <p class="section-label" id="section-label" style="display:none"></p>
 <div class="followup-wrap" id="followup-wrap">
@@ -200,7 +200,7 @@ function showTop10() {
   label.style.display = '';
   label.textContent = items.length
     ? `Top ${items.length} near you · ${range.label}`
-    : `No households found nearby (${range.label}) — try switching to Last year`;
+    : `No households found nearby (${range.label}) — try switching to Past 12 Months`;
   document.getElementById('period-toggle').style.display = 'flex';
   document.getElementById('footnotes').style.display = '';
   renderCards(items, 'cards-container');
