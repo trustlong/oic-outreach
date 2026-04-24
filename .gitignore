@@ -6,11 +6,7 @@ layers/
 layers_20mi/
 *.egg-info/
 .DS_Store
-bedford_with_mailstat.csv
-new_homeowners_near_oic*.csv
-non_local_movers_near_oic.csv
-asian_homeowners_20mi.csv
-chinese_*.csv
-top10_outreach.csv
-new_homeowners_near_oic_map.html
+Names_2010Census.csv
+likely_rental_properties_near_oic.csv
+docs/all_homeowners_20mi.csv
 /tmp/
