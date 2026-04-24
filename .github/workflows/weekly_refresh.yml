@@ -32,8 +32,8 @@ jobs:
       - name: Fetch all homeowners (20 miles, 1 year)
         run: python find_all_homeowners_20mi.py
 
-      - name: Generate website
-        run: python generate_site.py
+      - name: Copy CSV to docs
+        run: cp all_homeowners_20mi.csv docs/all_homeowners_20mi.csv
 
       - name: Commit and push updated data + site
         run: |
