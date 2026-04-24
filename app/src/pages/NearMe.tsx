@@ -7,6 +7,7 @@ import Toggle from '../components/Toggle'
 import SectionLabel from '../components/SectionLabel'
 import CardList from '../components/CardList'
 import FollowUp from '../components/FollowUp'
+import MapView from '../components/MapView'
 
 const TOGGLE_OPTIONS = [
   { value: 'month', label: 'Last Month' },
@@ -96,6 +97,11 @@ export default function NearMe() {
           <FollowUp records={records} version={followUpV} />
           <Toggle view={period} options={TOGGLE_OPTIONS} onChange={onPeriodChange} />
           <SectionLabel label={label} onRefresh={relocate} />
+          <MapView
+            items={items}
+            center={coords.current ? { lat: coords.current.lat, lon: coords.current.lon } : undefined}
+            centerLabel="You are here"
+          />
           <CardList items={items} onFollowUpChange={onFollowUpChange} />
           <div style={{ padding: '0 16px 24px', fontSize: '.74em', color: '#aaa', lineHeight: 1.7 }}>
             <p>¹ Distance shown from your current location, not OIC church.</p>

@@ -52,6 +52,8 @@ jobs:
       - name: Build React app
         run: npm run build
         working-directory: app
+        env:
+          VITE_GOOGLE_MAPS_API_KEY: ${{ secrets.VITE_GOOGLE_MAPS_API_KEY }}
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3

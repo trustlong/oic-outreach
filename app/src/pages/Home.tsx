@@ -7,6 +7,7 @@ import Toggle from '../components/Toggle'
 import SectionLabel from '../components/SectionLabel'
 import CardList from '../components/CardList'
 import FollowUp from '../components/FollowUp'
+import MapView from '../components/MapView'
 
 const TOGGLE_OPTIONS = [
   { value: 'month', label: 'Last Month' },
@@ -58,6 +59,7 @@ export default function Home() {
         ? <div style={{ textAlign: 'center', color: '#bbb', padding: '40px 16px' }}>Loading…</div>
         : <>
             <SectionLabel label={label} />
+            <MapView items={items} />
             <CardList items={items} onFollowUpChange={onFollowUpChange} />
           </>
       }

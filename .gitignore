@@ -1,4 +1,6 @@
 app/node_modules/
+app/.env.local
+app/.env.*.local
 app/public/all_homeowners_20mi.csv
 dist/
 .venv/
