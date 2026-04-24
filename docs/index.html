@@ -151,7 +151,7 @@ function showView(view) {
   const items = top10ForRange(range);
   currentCards = items;
   document.getElementById('section-label').textContent =
-    view === 'month' ? `${range.label} · Top 10 priority households` : 'Past 12 months · Top 10 priority households';
+    `${range.label} · Top 10 priority households`;
   renderCards(items, 'cards-container');
   gtag('event', 'view_switch', { view });
   renderFollowUp();

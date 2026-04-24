@@ -72,7 +72,7 @@ function lastMonthRange() {
 
 function lastYearRange() {
   const start = new Date(); start.setFullYear(start.getFullYear()-1);
-  return { start, end: null, label: 'past year' };
+  return { start, end: null, label: 'Past 12 Months' };
 }
 
 function inRange(dateStr, range) {
