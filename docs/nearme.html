@@ -461,7 +461,10 @@ function showTop10(uLat, uLon) {
   top10Cache = scored;
   const label = document.getElementById('section-label');
   label.style.display = '';
-  const periodLabel = currentPeriod === 'month' ? 'last month' : 'past year';
+  const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  const periodLabel = currentPeriod === 'month'
+    ? `${MONTHS[cutoffStart.getMonth()]} ${cutoffStart.getFullYear()}`
+    : 'past year';
   label.textContent = scored.length
     ? `Top ${scored.length} near you · ${periodLabel}`
     : `No households found nearby (${periodLabel}) — try switching to Last year`;
