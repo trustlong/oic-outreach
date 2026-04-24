@@ -1,105 +1,14 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-  <!-- Google tag (gtag.js) -->
-  <script async src="https://www.googletagmanager.com/gtag/js?id=G-810DPNWNQM"></script>
-  <script>
-    window.dataLayer = window.dataLayer || [];
-    function gtag(){dataLayer.push(arguments);}
-    gtag('js', new Date());
-    gtag('config', 'G-810DPNWNQM');
-  </script>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-  <title>OIC Outreach</title>
-  <link rel="stylesheet" href="styles.css">
-  <style>
-    .toggle-wrap { display: flex; justify-content: center; padding: 16px; gap: 0; }
-    .toggle-btn { flex: 1; max-width: 180px; padding: 10px 0; font-size: .88em; font-weight: 600; border: 2px solid #1a73e8; cursor: pointer; transition: all .2s; background: white; color: #1a73e8; }
-    .toggle-btn:first-child { border-radius: 8px 0 0 8px; border-right: none; }
-    .toggle-btn:last-child  { border-radius: 0 8px 8px 0; }
-    .toggle-btn.active { background: #1a73e8; color: white; }
-  </style>
-</head>
-<body>
-<header>
-  <h1>⛪ OIC Outreach</h1>
-  <p>New homeowners within 20 miles · Updated <span id="updated-date"></span></p>
-  <a href="nearme.html" style="display:inline-block;margin-top:10px;font-size:.8em;color:rgba(255,255,255,.7);text-decoration:none">📍 Near me →</a>
-</header>
-
-<div class="followup-wrap" id="followup-wrap">
-  <div class="followup-header" onclick="toggleFollowUpSection()" style="cursor:pointer">
-    📌 Following Up <span id="followup-count"></span>
-    <span id="followup-chevron" style="font-size:.8em;color:#c4933f;margin-left:auto;transition:transform .25s;display:inline-block">▲</span>
-  </div>
-  <div class="followup-cards" id="followup-cards"></div>
-</div>
-
-<div class="toggle-wrap">
-  <button class="toggle-btn active" id="btn-month" onclick="showView('month')">Last Month</button>
-  <button class="toggle-btn" id="btn-year" onclick="showView('year')">Past 12 Months</button>
-</div>
-<p class="section-label" id="section-label"></p>
-<div class="cards" id="cards-container"><div class="empty">Loading…</div></div>
-
-<div class="footnotes">
-  <p>¹ Ethnicity estimated from US Census surname data (BISG model) — not verified.</p>
-  <p>² "Origin unknown" means the mailing address was already updated to the new home, or county has no mailing data (Campbell).</p>
-  <p>³ Household size estimated from sqft where available (Lynchburg, Amherst), otherwise from sale price — treat as approximate.</p>
-  <p>⁴ Companies, LLCs, and confirmed local movers are excluded.</p>
-  <p>⁵ Priority score (max 7): ethnicity Chinese=+3, other Asian=+2, Hispanic/Black=+1 · origin out-of-state=+2, in-state/unknown=+1 · distance ≤5mi=+2, ≤10mi=+1.</p>
-</div>
-
-<footer style="text-align:center;padding:24px;font-size:.75em;color:#bbb;line-height:2">
-  Data from Bedford, Lynchburg, Campbell, Amherst &amp; Appomattox County GIS &nbsp;·&nbsp;
-  Ethnicity via surgeo BISG &nbsp;·&nbsp; Refreshed every Monday
-  <br><a href="disclaimer.html" style="color:#bbb">Disclaimer</a>
-</footer>
-
-<script src="app.js"></script>
-<script>
-const OIC_LAT = 37.3244, OIC_LON = -79.2885;
-let allRecords = [];
-let currentView = 'month';
-
-function scoreRecord(r) {
-  const eth    = r.ESTIMATED_ETHNICITY || '';
-  const isCn   = r.IS_CHINESE === 'True';
-  const origin = r.MOVE_ORIGIN || '';
-  const lat = parseFloat(r.LAT), lon = parseFloat(r.LON);
-  if (isNaN(lat) || isNaN(lon)) return null;
-  const dist = distMiles(OIC_LAT, OIC_LON, lat, lon);
-  const ethS = isCn ? 3 : eth === 'Asian/PI' ? 2 : (eth === 'Hispanic' || eth === 'Black') ? 1 : 0;
-  const oriS = origin.startsWith('Out-of-state') ? 2 : 1;
-  const disS = dist <= 5 ? 2 : dist <= 10 ? 1 : 0;
-  return { score: ethS + oriS + disS, dist };
-}
-
-
-function showView(view) {
-  currentView = view;
-  document.getElementById('btn-month').classList.toggle('active', view === 'month');
-  document.getElementById('btn-year').classList.toggle('active', view === 'year');
-  const range = view === 'month' ? lastMonthRange() : lastYearRange();
-  const items = top10(allRecords, range, scoreRecord);
-  currentCards = items;
-  document.getElementById('section-label').textContent =
-    `${range.label} · Top 10 priority households`;
-  renderCards(items, 'cards-container');
-  gtag('event', 'view_switch', { view });
-  renderFollowUp();
-}
-
-async function init() {
-  document.getElementById('updated-date').textContent =
-    new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-  allRecords = await loadCSV('all_homeowners_20mi.csv');
-  followUpSource = allRecords.filter(r => !isEntity(r.Owner1) && r.MOVE_ORIGIN !== 'Local');
-  showView('month');
-}
-
-document.addEventListener('DOMContentLoaded', init);
-</script>
-</body>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+    <title>OIC Outreach</title>
+    <script type="module" crossorigin src="/assets/main-NpApoCrZ.js"></script>
+    <link rel="modulepreload" crossorigin href="/assets/src-CwFvkPfG.js">
+    <link rel="stylesheet" crossorigin href="/assets/src-CDcoNBzT.css">
+  </head>
+  <body>
+    <div id="root"></div>
+  </body>
 </html>
