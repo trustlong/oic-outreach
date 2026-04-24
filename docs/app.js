@@ -89,6 +89,16 @@ function cardKey(r) {
 function getState(r)        { return JSON.parse(localStorage.getItem(cardKey(r)) || '{}'); }
 function setState(r, patch) { const s=getState(r); localStorage.setItem(cardKey(r), JSON.stringify({...s,...patch})); }
 
+// ── Filtering & ranking ───────────────────────────────────────────────────────
+function top10(records, range, scoreFn) {
+  return records
+    .filter(r => !isEntity(r.Owner1) && r.MOVE_ORIGIN !== 'Local' && inRange(r.Sale1D, range))
+    .map(r => { const s = scoreFn(r); return s ? {r, ...s} : null; })
+    .filter(Boolean)
+    .sort((a, b) => b.score - a.score || a.dist - b.dist)
+    .slice(0, 10);
+}
+
 // ── CSV loading ───────────────────────────────────────────────────────────────
 async function loadCSV(url) {
   const res = await fetch(url);
