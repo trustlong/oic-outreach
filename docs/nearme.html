@@ -157,138 +157,24 @@
   <p><a href="disclaimer.html" style="color:#bbb">Disclaimer</a></p>
 </div>
 
+<script src="app.js"></script>
 <script>
-const ETH_COLOR = {
-  "Asian/PI":"#1a73e8","Hispanic":"#e67e22","Black":"#8e44ad",
-  "White":"#7f8c8d","Unknown":"#95a5a6","Am.Indian":"#27ae60","Multiracial":"#c0392b"
-};
-
 let allRecords = [];
 let userLat, userLon;
+let currentPeriod = 'month';
 
-// ── Entity filter ─────────────────────────────────────────────────────────────
-const ENTITY_RE = /\b(LLC|INC|CORP|LTD|LP|LLP|TRUST|TRS|PROPERTIES|HOLDINGS|REALTY|GROUP|FUND|FOUNDATION|SERIES|CONSERVE|BUILDWELL|ENTERPRISES|PARTNERS|VENTURES|CAPITAL|INVESTMENTS|ESTATE|MORTGAGE|TITLE|ABSTRACT)\b/i;
-function isEntity(owner) { return ENTITY_RE.test(owner || ''); }
-
-// ── CSV parser ────────────────────────────────────────────────────────────────
-function parseCSV(text) {
-  const lines = text.trim().split('\n');
-  const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g,''));
-  return lines.slice(1).map(line => {
-    const vals = [];
-    let cur = '', inQuote = false;
-    for (const ch of line) {
-      if (ch === '"') { inQuote = !inQuote; }
-      else if (ch === ',' && !inQuote) { vals.push(cur.trim()); cur = ''; }
-      else { cur += ch; }
-    }
-    vals.push(cur.trim());
-    const obj = {};
-    headers.forEach((h, i) => obj[h] = vals[i] || '');
-    return obj;
-  });
-}
-
-// ── Scoring ───────────────────────────────────────────────────────────────────
-function distMiles(lat1, lon1, lat2, lon2) {
-  const R = 3958.8;
-  const dLat = (lat2 - lat1) * Math.PI / 180;
-  const dLon = (lon2 - lon1) * Math.PI / 180;
-  const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180) * Math.cos(lat2*Math.PI/180) * Math.sin(dLon/2)**2;
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-}
-
-function scoreRecord(r, uLat, uLon) {
+function scoreRecord(r) {
   const eth    = r.ESTIMATED_ETHNICITY || '';
   const isCn   = r.IS_CHINESE === 'True';
   const origin = r.MOVE_ORIGIN || '';
-  const lat    = parseFloat(r.LAT), lon = parseFloat(r.LON);
-  if (isNaN(lat) || isNaN(lon)) return -1;
-
-  const d = distMiles(uLat, uLon, lat, lon);
-
+  const lat = parseFloat(r.LAT), lon = parseFloat(r.LON);
+  if (isNaN(lat) || isNaN(lon)) return null;
+  const d = distMiles(userLat, userLon, lat, lon);
   const ethS = isCn ? 3 : eth === 'Asian/PI' ? 2 : (eth === 'Hispanic' || eth === 'Black') ? 1 : 0;
   const oriS = origin.startsWith('Out-of-state') ? 2 : 1;
   const disS = d <= 0.5 ? 3 : d <= 1 ? 2 : d <= 2 ? 1 : 0;
-
   return { score: ethS + oriS + disS, dist: d };
 }
-
-function fmtOrigin(o) {
-  if (o.startsWith('Out-of-state')) return '✈ Moved from ' + o.replace('Out-of-state (','').replace(')','');
-  if (o.startsWith('In-state')) return '↔ Moved within VA';
-  return '? Origin unknown';
-}
-
-function fmtName(n) {
-  return n.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
-}
-
-// ── localStorage (shared with index.html) ─────────────────────────────────────
-function cardKey(r) {
-  const name = (r.Owner1||'').replace(/[^a-z0-9]/gi,'').toLowerCase().slice(0,12);
-  const date = (r.Sale1D||'').replace(/[^0-9]/g,'');
-  const lat  = parseFloat(r.LAT||0).toFixed(3);
-  const lon  = parseFloat(r.LON||0).toFixed(3);
-  return `oic-${name}-${date}-${lat}-${lon}`;
-}
-function getState(r)       { return JSON.parse(localStorage.getItem(cardKey(r)) || '{}'); }
-function setState(r, patch) { const s = getState(r); localStorage.setItem(cardKey(r), JSON.stringify({...s,...patch})); }
-
-// ── Render ────────────────────────────────────────────────────────────────────
-function renderCards(top10) {
-  const container = document.getElementById('cards-container');
-  container.innerHTML = top10.map((item, i) => {
-    const r     = item.r;
-    const eth   = r.ESTIMATED_ETHNICITY || 'Unknown';
-    const color = ETH_COLOR[eth] || '#95a5a6';
-    const nav   = (r.LAT && r.LON) ? `https://maps.google.com/?q=${parseFloat(r.LAT)},${parseFloat(r.LON)}` : '';
-    const addr  = (r.LocAddr||'').replace(/^\d+\.0\s*/,'').trim() || 'Address on file';
-    const state = getState(r);
-    const visitedCls    = state.visited    ? 'visited'    : '';
-    const interestedCls = state.interested ? 'interested' : '';
-    const visitedTxt    = state.visited    ? '✅ Visited'    : '❓ Visited';
-    const interestedTxt = state.interested ? '📌 Following Up' : '❓ Follow Up?';
-    return `
-    <div class="card" id="nm-card-${i}" style="border-left-color:${color};opacity:${state.visited?'0.45':'1'}">
-      <div class="card-header" onclick="toggleCard(${i})">
-        <span class="rank">${i+1}</span>
-        <div class="card-main">
-          <div class="card-name">${fmtName(r.Owner1||'')}</div>
-          <div class="card-meta">
-            <span>${item.dist.toFixed(1)} mi · ${r.SOURCE||''}</span>
-            <span style="color:#aaa">·</span>
-            <span>${r.Sale1D||''}</span>
-          </div>
-        </div>
-        <span class="eth-badge" style="background:${color}">${eth}</span>
-        <span class="chevron">▼</span>
-      </div>
-      <div class="card-detail">
-        <div class="detail-row"><span class="detail-label">Address</span><span class="detail-value">${addr}, ${r.SOURCE||''}</span></div>
-        <div class="detail-row"><span class="detail-label">Origin</span><span class="detail-value">${fmtOrigin(r.MOVE_ORIGIN||'')}</span></div>
-        <div class="detail-row"><span class="detail-label">Household</span><span class="detail-value">Est. ${r.EST_HOUSEHOLD_SIZE||'?'} people</span></div>
-        <div class="score-dots">
-          ${Array.from({length:7},(_,j)=>`<div class="dot ${j<item.score?'filled':''}"></div>`).join('')}
-          <span class="score-label">Score ${item.score}/7</span>
-        </div>
-        ${nav ? `<a class="nav-btn" href="${nav}" target="_blank" rel="noopener" onclick="gtag('event','navigate_address',{ethnicity:'${r.ESTIMATED_ETHNICITY||'Unknown'}',county:'${r.SOURCE||''}'})" >📍 Navigate to address</a>` : ''}
-        <div class="actions">
-          <button class="action-btn ${visitedCls}"    id="nm-visited-${i}"    onclick="toggleVisited(${i},event)">${visitedTxt}</button>
-          <button class="action-btn ${interestedCls}" id="nm-interested-${i}" onclick="toggleInterested(${i},event)">${interestedTxt}</button>
-          <button class="action-btn" onclick="toggleNote(${i},event)">📝 Note</button>
-        </div>
-        <textarea class="note-area ${state.note?'visible':''}" id="nm-note-${i}" placeholder="Add a note..."
-          oninput="saveNote(${i})" onchange="saveNote(${i})">${state.note||''}</textarea>
-        <button class="note-save ${state.note?'visible':''}" id="nm-note-save-${i}" onclick="saveNote(${i})">Save note</button>
-        <div class="note-saved-text" id="nm-note-saved-${i}">✓ Saved</div>
-      </div>
-    </div>`;
-  }).join('');
-}
-
-let top10Cache = [];
-let currentPeriod = 'month';
 
 function switchPeriod(period) {
   gtag('event', 'period_switch', { period });
@@ -297,200 +183,44 @@ function switchPeriod(period) {
   document.getElementById('btn-month').style.color      = period === 'month' ? 'white'   : '#1a73e8';
   document.getElementById('btn-year').style.background  = period === 'year'  ? '#1a73e8' : 'white';
   document.getElementById('btn-year').style.color       = period === 'year'  ? 'white'   : '#1a73e8';
-  showTop10(userLat, userLon);
+  showTop10();
 }
 
-function toggleCard(i) {
-  const card = document.getElementById('nm-card-' + i);
-  card.classList.toggle('open');
-  const isOpen = card.classList.contains('open');
-  const isVisited = document.getElementById('nm-visited-' + i)?.classList.contains('visited');
-  card.style.opacity = (!isOpen && isVisited) ? '0.45' : '1';
-}
-
-function toggleVisited(i, e) {
-  e.stopPropagation();
-  const btn = document.getElementById('nm-visited-' + i);
-  const active = btn.classList.toggle('visited');
-  btn.textContent = active ? '✅ Visited' : '❓ Visited';
-  setState(top10Cache[i].r, {visited: active});
-  gtag('event', 'mark_visited', { status: active ? 'visited' : 'unvisited', ethnicity: top10Cache[i].r.ESTIMATED_ETHNICITY || 'Unknown', county: top10Cache[i].r.SOURCE || '' });
-  const card = document.getElementById('nm-card-' + i);
-  card.style.opacity = (active && !card.classList.contains('open')) ? '0.45' : '1';
-}
-
-function toggleInterested(i, e) {
-  e.stopPropagation();
-  const btn = document.getElementById('nm-interested-' + i);
-  const active = btn.classList.toggle('interested');
-  btn.textContent = active ? '📌 Following Up' : '❓ Follow Up?';
-  setState(top10Cache[i].r, {interested: active});
-  gtag('event', 'mark_follow_up', { status: active ? 'following' : 'unfollowing', ethnicity: top10Cache[i].r.ESTIMATED_ETHNICITY || 'Unknown', county: top10Cache[i].r.SOURCE || '' });
-  renderFollowUp();
-}
-
-function renderFollowUp() {
-  const wrap  = document.getElementById('followup-wrap');
-  const count = document.getElementById('followup-count');
-  const cont  = document.getElementById('followup-cards');
-  const interested = allRecords.filter(r => getState(r).interested);
-  if (!interested.length) { wrap.classList.remove('has-items'); return; }
-  wrap.classList.add('has-items');
-  count.textContent = `(${interested.length})`;
-  cont.innerHTML = interested.map(r => {
-    const eth   = r.ESTIMATED_ETHNICITY || 'Unknown';
-    const color = ETH_COLOR[eth] || '#95a5a6';
-    const key   = cardKey(r);
-    const note  = getState(r).note || '';
-    const nav   = (r.LAT && r.LON) ? `https://maps.google.com/?q=${parseFloat(r.LAT)},${parseFloat(r.LON)}` : '';
-    const addr  = (r.LocAddr||'').replace(/^\d+\.0\s*/,'').trim() || 'Address on file';
-    return `
-    <div class="card" id="fp-card-${key}" style="border-left-color:${color};margin-bottom:6px">
-      <div class="card-header" onclick="toggleFpCard('${key}')">
-        <div class="card-main">
-          <div class="card-name">${fmtName(r.Owner1||'')}</div>
-          <div class="card-meta"><span>${r.SOURCE||''}</span><span style="color:#aaa">·</span><span>${r.Sale1D||''}</span></div>
-        </div>
-        <span class="eth-badge" style="background:${color}">${eth}</span>
-        <span class="chevron">▼</span>
-      </div>
-      <div class="card-detail">
-        <div class="detail-row"><span class="detail-label">Address</span><span class="detail-value">${addr}, ${r.SOURCE||''}</span></div>
-        <div class="detail-row"><span class="detail-label">Origin</span><span class="detail-value">${fmtOrigin(r.MOVE_ORIGIN||'')}</span></div>
-        <div class="detail-row" style="flex-direction:column;gap:4px">
-          <span class="detail-label">Note</span>
-          <textarea class="note-area visible" id="fp-note-${key}" style="margin-top:4px" placeholder="Add a note..."
-            oninput="saveFpNote('${key}')" onchange="saveFpNote('${key}')">${note}</textarea>
-          <button class="note-save visible" onclick="saveFpNote('${key}')">Save note</button>
-          <div class="note-saved-text" id="fp-note-saved-${key}">✓ Saved</div>
-        </div>
-        ${nav ? `<a class="nav-btn" href="${nav}" target="_blank" rel="noopener" onclick="gtag('event','navigate_address',{ethnicity:'${eth}',county:'${r.SOURCE||''}'})" >📍 Navigate to address</a>` : ''}
-        <div style="margin-top:10px">
-          <button style="font-size:.78em;color:#c0392b;background:none;border:1px solid #eaa;border-radius:6px;padding:5px 10px;cursor:pointer"
-            onclick="removeFollowUp('${key}', event)">✕ Remove from Following Up</button>
-        </div>
-      </div>
-    </div>`;
-  }).join('');
-}
-
-function toggleFpCard(key) {
-  document.getElementById('fp-card-' + key)?.classList.toggle('open');
-}
-
-function toggleFollowUpSection() {
-  const cards = document.getElementById('followup-cards');
-  const chevron = document.getElementById('followup-chevron');
-  const collapsed = cards.style.display === 'none';
-  cards.style.display = collapsed ? '' : 'none';
-  chevron.style.transform = collapsed ? '' : 'rotate(180deg)';
-}
-
-function saveFpNote(key) {
-  const val = document.getElementById('fp-note-' + key)?.value || '';
-  const stored = JSON.parse(localStorage.getItem(key) || '{}');
-  localStorage.setItem(key, JSON.stringify({...stored, note: val}));
-  const saved = document.getElementById('fp-note-saved-' + key);
-  if (saved) { saved.style.display = 'block'; setTimeout(() => saved.style.display = 'none', 1500); }
-}
-
-function removeFollowUp(key, e) {
-  e.stopPropagation();
-  const stored = JSON.parse(localStorage.getItem(key) || '{}');
-  localStorage.setItem(key, JSON.stringify({...stored, interested: false}));
-  gtag('event', 'remove_follow_up');
-  top10Cache.forEach((item, i) => {
-    if (cardKey(item.r) === key) {
-      const btn = document.getElementById('nm-interested-' + i);
-      if (btn) { btn.classList.remove('interested'); btn.textContent = '❓ Follow Up?'; }
-    }
-  });
-  renderFollowUp();
-}
-
-function toggleNote(i, e) {
-  e.stopPropagation();
-  document.getElementById('nm-note-' + i).classList.toggle('visible');
-  document.getElementById('nm-note-save-' + i).classList.toggle('visible');
-  document.getElementById('nm-note-' + i).focus();
-}
-
-function saveNote(i) {
-  const val = document.getElementById('nm-note-' + i).value;
-  setState(top10Cache[i].r, {note: val});
-  gtag('event', 'save_note');
-  const saved = document.getElementById('nm-note-saved-' + i);
-  saved.style.display = 'block';
-  setTimeout(() => saved.style.display = 'none', 1500);
-}
-
-// ── Main flow ─────────────────────────────────────────────────────────────────
-function setStatus(msg) { document.getElementById('status').textContent = msg; }
-
-async function loadCSV() {
-  if (allRecords.length) return;
-  setStatus('Loading data…');
-  const r = await fetch('all_homeowners_20mi.csv');
-  const text = await r.text();
-  allRecords = parseCSV(text);
-  setStatus('');
-}
-
-function showTop10(uLat, uLon) {
-  let cutoffStart, cutoffEnd = null;
-  if (currentPeriod === 'month') {
-    const now = new Date();
-    cutoffEnd   = new Date(now.getFullYear(), now.getMonth(), 1);
-    cutoffStart = new Date(cutoffEnd.getFullYear(), cutoffEnd.getMonth() - 1, 1);
-  } else {
-    cutoffStart = new Date();
-    cutoffStart.setFullYear(cutoffStart.getFullYear() - 1);
-  }
-
-  const scored = allRecords
-    .filter(r => {
-      if (isEntity(r.Owner1) || r.MOVE_ORIGIN === 'Local') return false;
-      const d = parseDate(r.Sale1D);
-      return d && d >= cutoffStart && (cutoffEnd === null || d < cutoffEnd);
-    })
-    .map(r => { const s = scoreRecord(r, uLat, uLon); return s === -1 ? null : {r, score: s.score, dist: s.dist}; })
+function showTop10() {
+  const range = currentPeriod === 'month' ? lastMonthRange() : lastYearRange();
+  const items = allRecords
+    .filter(r => !isEntity(r.Owner1) && r.MOVE_ORIGIN !== 'Local' && inRange(r.Sale1D, range))
+    .map(r => { const s = scoreRecord(r); return s ? {r, ...s} : null; })
     .filter(Boolean)
     .sort((a, b) => b.score - a.score || a.dist - b.dist)
     .slice(0, 10);
 
-  top10Cache = scored;
+  currentCards = items;
   const label = document.getElementById('section-label');
   label.style.display = '';
-  const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
-  const periodLabel = currentPeriod === 'month'
-    ? `${MONTHS[cutoffStart.getMonth()]} ${cutoffStart.getFullYear()}`
-    : 'past year';
-  label.textContent = scored.length
-    ? `Top ${scored.length} near you · ${periodLabel}`
-    : `No households found nearby (${periodLabel}) — try switching to Last year`;
+  label.textContent = items.length
+    ? `Top ${items.length} near you · ${range.label}`
+    : `No households found nearby (${range.label}) — try switching to Last year`;
   document.getElementById('period-toggle').style.display = 'flex';
   document.getElementById('footnotes').style.display = '';
-  renderCards(scored);
+  renderCards(items, 'cards-container');
   renderFollowUp();
 }
 
-function parseDate(s) {
-  if (!s) return null;
-  for (const fmt of [/(\d{2})\/(\d{2})\/(\d{4})/, /(\d{4})-(\d{2})-(\d{2})/]) {
-    const m = s.match(fmt);
-    if (m) return fmt.source.startsWith('(\\d{2})') ? new Date(m[3], m[1]-1, m[2]) : new Date(m[1], m[2]-1, m[3]);
-  }
-  return null;
-}
+function setStatus(msg) { document.getElementById('status').textContent = msg; }
 
 async function locateMe() {
   gtag('event', 'locate_me');
   const btn = document.getElementById('locate-btn');
   btn.disabled = true;
   btn.textContent = '⏳ Getting location…';
-
   try {
-    await loadCSV();
+    if (!allRecords.length) {
+      setStatus('Loading data…');
+      allRecords = await loadCSV('all_homeowners_20mi.csv');
+      followUpSource = allRecords.filter(r => !isEntity(r.Owner1) && r.MOVE_ORIGIN !== 'Local');
+      setStatus('');
+    }
     setStatus('Requesting location…');
     navigator.geolocation.getCurrentPosition(
       pos => {
@@ -498,11 +228,11 @@ async function locateMe() {
         userLon = pos.coords.longitude;
         setStatus(`📍 Location found · Scoring ${allRecords.length.toLocaleString()} households…`);
         setTimeout(() => {
-          showTop10(userLat, userLon);
+          showTop10();
           setStatus('');
           btn.textContent = '🔄 Refresh';
           btn.disabled = false;
-          btn.onclick = () => showTop10(userLat, userLon);
+          btn.onclick = showTop10;
         }, 50);
       },
       err => {
