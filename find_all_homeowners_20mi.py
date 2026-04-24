@@ -19,7 +19,7 @@ OIC_LON      = -79.2885
 RADIUS_MILES = 20.0
 DAYS         = 365
 BATCH_SIZE   = 1000
-OUTPUT_FILE  = "all_homeowners_20mi.csv"
+OUTPUT_FILE  = "docs/all_homeowners_20mi.csv"
 LAYERS_DIR   = "layers_20mi"
 
 BEDFORD_API    = "https://webgis.bedfordcountyva.gov/arcgis/rest/services/OpenData/OpenDataProperty/MapServer/6/query"
