@@ -39,10 +39,13 @@ export function scoreOIC(r: HomeownerRecord): { score: number; dist: number } | 
 }
 
 // GPS-based scoring (near me page) — distance from user
+export const NEARME_MAX_MILES = 3
+
 export function scoreGPS(r: HomeownerRecord, uLat: number, uLon: number): { score: number; dist: number } | null {
   const lat = parseFloat(r.LAT), lon = parseFloat(r.LON)
   if (isNaN(lat) || isNaN(lon)) return null
   const dist = distMiles(uLat, uLon, lat, lon)
+  if (dist > NEARME_MAX_MILES) return null
   const disS = dist <= 0.5 ? 3 : dist <= 1 ? 2 : dist <= 2 ? 1 : 0
   return { score: ethScore(r) + oriScore(r) + disS, dist }
 }

@@ -66,8 +66,8 @@ export default function NearMe() {
 
   const range = period === 'month' ? lastMonthRange() : lastYearRange()
   const label = items.length
-    ? `Top ${items.length} near you · ${range.label}`
-    : `No households found nearby (${range.label}) — try switching to Past 12 Months`
+    ? `Top ${items.length} within 3 mi · ${range.label}`
+    : `No households within 3 mi (${range.label}) — try switching to Past 12 Months`
 
   const onFollowUpChange = useCallback(() => setFollowUpV(v => v + 1), [])
 
