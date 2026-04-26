@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import type { ScoredRecord } from '../lib/types'
 import { getState, setState } from '../lib/storage'
-import { fmtName, fmtOrigin, fmtAddr, ETH_COLOR } from '../lib/format'
+import { fmtName, fmtAddr, ETH_COLOR } from '../lib/format'
 
 interface Props {
   item: ScoredRecord
@@ -72,15 +72,14 @@ export default function Card({ item, rank, onFollowUpChange }: Props) {
       {open && (
         <div style={{ padding: '12px 14px 14px 48px', fontSize: '.84em', color: '#555', borderTop: '1px solid #f0f0f0' }}>
           <DetailRow label="Address" value={`${fmtAddr(r.LocAddr)}, ${r.SOURCE}`} />
-          <DetailRow label="Origin"  value={fmtOrigin(r.MOVE_ORIGIN)} />
           <DetailRow label="Household" value={`Est. ${r.EST_HOUSEHOLD_SIZE || '?'} people`} />
 
           {/* Score dots */}
           <div style={{ display: 'flex', gap: 4, marginTop: 10, paddingTop: 10, borderTop: '1px solid #f0f0f0' }}>
-            {Array.from({ length: 7 }, (_, j) => (
+            {Array.from({ length: 5 }, (_, j) => (
               <div key={j} style={{ width: 10, height: 10, borderRadius: '50%', background: j < score ? '#1a73e8' : '#e0e0e0' }} />
             ))}
-            <span style={{ fontSize: '.75em', color: '#aaa', marginLeft: 6, alignSelf: 'center' }}>Score {score}/7</span>
+            <span style={{ fontSize: '.75em', color: '#aaa', marginLeft: 6, alignSelf: 'center' }}>Score {score}/5</span>
           </div>
 
           {nav && (

@@ -9,7 +9,6 @@ export interface HomeownerRecord {
   ESTIMATED_ETHNICITY: string
   ETHNICITY_CONFIDENCE: string
   IS_CHINESE: string
-  MOVE_ORIGIN: string
   EST_HOUSEHOLD_SIZE: string
   HH_SIZE_BASIS: string
   MailCity: string

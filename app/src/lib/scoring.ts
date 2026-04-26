@@ -1,10 +1,23 @@
 import type { HomeownerRecord, ScoredRecord, DateRange } from './types'
-import { inRange, parseDate } from './periods'
+import { inRange } from './periods'
 
 const ENTITY_RE = /\b(LLC|INC|CORP|LTD|LP|LLP|TRUST|TRS|PROPERTIES|HOLDINGS|REALTY|GROUP|FUND|FOUNDATION|SERIES|CONSERVE|BUILDWELL|ENTERPRISES|PARTNERS)\b/i
 
 export function isEntity(owner: string): boolean {
   return ENTITY_RE.test(owner)
+}
+
+export type EthnicityFilter = 'all' | 'chinese' | 'asian' | 'white' | 'hispanic' | 'black'
+
+export function matchesEthnicity(r: HomeownerRecord, f: EthnicityFilter): boolean {
+  switch (f) {
+    case 'all':      return true
+    case 'chinese':  return r.IS_CHINESE === 'True'
+    case 'asian':    return r.IS_CHINESE === 'True' || r.ESTIMATED_ETHNICITY === 'Asian/PI'
+    case 'white':    return r.ESTIMATED_ETHNICITY === 'White'
+    case 'hispanic': return r.ESTIMATED_ETHNICITY === 'Hispanic'
+    case 'black':    return r.ESTIMATED_ETHNICITY === 'Black'
+  }
 }
 
 export function distMiles(lat1: number, lon1: number, lat2: number, lon2: number): number {
@@ -23,17 +36,6 @@ function ethScore(r: HomeownerRecord): number {
   return 1
 }
 
-function oriScore(r: HomeownerRecord): number {
-  return r.MOVE_ORIGIN?.startsWith('Out-of-state') ? 2 : 1
-}
-
-function recencyScore(r: HomeownerRecord): number {
-  const d = parseDate(r.Sale1D)
-  if (!d) return 0
-  const days = (Date.now() - d.getTime()) / 86_400_000
-  return days <= 30 ? 1 : 0
-}
-
 // OIC-based scoring (index page) — distance from church
 export const OIC_LAT = 37.3244
 export const OIC_LON = -79.2885
@@ -43,7 +45,7 @@ export function scoreOIC(r: HomeownerRecord): { score: number; dist: number } | 
   if (isNaN(lat) || isNaN(lon)) return null
   const dist = distMiles(OIC_LAT, OIC_LON, lat, lon)
   const disS = dist <= 2 ? 3 : dist <= 5 ? 2 : dist <= 10 ? 1 : 0
-  return { score: ethScore(r) + oriScore(r) + disS + recencyScore(r), dist }
+  return { score: ethScore(r) + disS, dist }
 }
 
 // GPS-based scoring (near me page) — distance from user
@@ -55,7 +57,7 @@ export function scoreGPS(r: HomeownerRecord, uLat: number, uLon: number): { scor
   const dist = distMiles(uLat, uLon, lat, lon)
   if (dist > NEARME_MAX_MILES) return null
   const disS = dist <= 0.5 ? 3 : dist <= 1 ? 2 : dist <= 2 ? 1 : 0
-  return { score: ethScore(r) + oriScore(r) + disS + recencyScore(r), dist }
+  return { score: ethScore(r) + disS, dist }
 }
 
 export function top10(
@@ -64,7 +66,7 @@ export function top10(
   scoreFn: (r: HomeownerRecord) => { score: number; dist: number } | null
 ): ScoredRecord[] {
   return records
-    .filter(r => !isEntity(r.Owner1) && r.MOVE_ORIGIN !== 'Local' && inRange(r.Sale1D, range))
+    .filter(r => !isEntity(r.Owner1) && inRange(r.Sale1D, range))
     .map(r => { const s = scoreFn(r); return s ? { r, ...s } : null })
     .filter((x): x is ScoredRecord => x !== null)
     .sort((a, b) => b.score - a.score || a.dist - b.dist)

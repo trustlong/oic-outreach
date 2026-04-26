@@ -230,19 +230,22 @@ ENTITY_RE = re.compile(
     re.IGNORECASE,
 )
 
-def classify_origin(mailstat, mailcity, mailaddr, locaddr):
-    norm = lambda s: re.sub(r'[^a-z0-9]', '', str(s).lower().strip()) if s else ''
-    if norm(mailaddr) and norm(mailaddr) == norm(locaddr):
-        return "Unknown (mailing updated)"
-    if not mailstat:
-        return "Unknown (no mail data)"
-    state = str(mailstat).strip().upper()
-    city  = str(mailcity).strip().upper()
-    if state != "VA":
-        return f"Out-of-state ({state})"
-    if city in LOCAL_CITIES:
-        return "Local"
-    return "In-state (VA)"
+_norm_addr = lambda s: re.sub(r'[^a-z0-9]', '', str(s).lower().strip()) if s else ''
+
+# Drops absentee-landlord and corporate-owned records.
+# Owner-occupied if: owner is a person AND mail address equals (or matches) property address.
+# Mismatched mail address within RENTAL_GRACE_DAYS = mail not yet updated, keep.
+# Mismatched mail address beyond that window = landlord (local or out-of-area), drop.
+RENTAL_GRACE_DAYS = 90
+
+def is_likely_rental(owner, mailaddr, locaddr, sale_dt):
+    if ENTITY_RE.search(str(owner or '')):
+        return True
+    norm_mail = _norm_addr(mailaddr)
+    if not norm_mail or norm_mail == _norm_addr(locaddr):
+        return False
+    days_since_sale = (datetime.now() - sale_dt).days if sale_dt else 9999
+    return days_since_sale > RENTAL_GRACE_DAYS
 
 SQFT_BRACKETS = [(1000,1.8),(1500,2.3),(2000,2.7),(2500,3.0),(3000,3.2),(3500,3.4),(4000,3.5),(float('inf'),3.4)]
 
@@ -396,14 +399,13 @@ def main():
     df = df[df["DISTANCE_MILES"] <= RADIUS_MILES].copy()
     print(f"   Within {RADIUS_MILES} miles: {len(df):,}")
 
-    # Move origin
-    df["MOVE_ORIGIN"] = df.apply(
-        lambda r: classify_origin(r["MailStat_src"], r["MailCity_src"], r["MailAddr_src"], r.get("LocAddr","")), axis=1
+    # Rental exclusion: drop entity-owned and absentee-landlord records
+    df["_is_rental"] = df.apply(
+        lambda r: is_likely_rental(r["Owner1"], r["MailAddr_src"], r.get("LocAddr",""), r["_dt"]),
+        axis=1,
     )
-
-    # Non-local filter
-    df = df[~df["MOVE_ORIGIN"].isin(["Local"])].copy()
-    print(f"   Non-local movers: {len(df):,}")
+    df = df[~df["_is_rental"]].drop(columns=["_is_rental"]).copy()
+    print(f"   After rental exclusion: {len(df):,}")
 
     # Household size
     hh = df.apply(lambda r: estimate_hh(r.get("FinSqft"), r.get("SalePrice")), axis=1)
@@ -416,7 +418,7 @@ def main():
 
     # Clean up columns
     keep = ["DISTANCE_MILES","LAT","LON","SOURCE","Owner1","LocAddr",
-            "SALE_DATE_STR","SalePrice","MOVE_ORIGIN",
+            "SALE_DATE_STR","SalePrice",
             "ESTIMATED_ETHNICITY","ETHNICITY_CONFIDENCE","IS_CHINESE",
             "EST_HOUSEHOLD_SIZE","HH_SIZE_BASIS",
             "MailCity_src","MailStat_src"]
@@ -433,10 +435,6 @@ def main():
     print("\n📊 Ethnicity breakdown:")
     for eth, grp in df.groupby("ESTIMATED_ETHNICITY"):
         print(f"   {eth:<15} {len(grp):>5}")
-
-    print("\n📊 Move origin breakdown:")
-    for orig, grp in df.groupby("MOVE_ORIGIN"):
-        print(f"   {orig:<40} {len(grp):>5}")
 
     split_layers(df)
     print("\n🎉 Done!")

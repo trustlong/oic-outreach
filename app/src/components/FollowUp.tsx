@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import type { HomeownerRecord } from '../lib/types'
 import { getState, setState, cardKey } from '../lib/storage'
-import { fmtName, fmtOrigin, fmtAddr, ETH_COLOR } from '../lib/format'
+import { fmtName, fmtAddr, ETH_COLOR } from '../lib/format'
 
 interface Props {
   records: HomeownerRecord[]
@@ -69,7 +69,6 @@ function FollowUpCard({ r }: { r: HomeownerRecord }) {
       {open && (
         <div style={{ padding: '12px 14px 14px 14px', fontSize: '.84em', color: '#555', borderTop: '1px solid #f0f0f0' }}>
           <div style={{ marginBottom: 6 }}><span style={{ color: '#aaa', marginRight: 8 }}>Address</span>{fmtAddr(r.LocAddr)}, {r.SOURCE}</div>
-          <div style={{ marginBottom: 6 }}><span style={{ color: '#aaa', marginRight: 8 }}>Origin</span>{fmtOrigin(r.MOVE_ORIGIN)}</div>
           <textarea
             value={note}
             onChange={e => saveNote(e.target.value)}

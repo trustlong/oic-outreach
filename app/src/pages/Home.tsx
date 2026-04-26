@@ -1,22 +1,19 @@
 import { useEffect, useState, useCallback } from 'react'
 import type { HomeownerRecord, ScoredRecord } from '../lib/types'
 import { loadCSV } from '../lib/csv'
-import { lastMonthRange, lastYearRange } from '../lib/periods'
-import { scoreOIC, top10 } from '../lib/scoring'
-import Toggle from '../components/Toggle'
+import { getRange } from '../lib/periods'
+import { scoreOIC, top10, matchesEthnicity } from '../lib/scoring'
+import { ethLabel } from '../lib/format'
+import Filters, { type Period, type Ethnicity } from '../components/Filters'
 import SectionLabel from '../components/SectionLabel'
 import CardList from '../components/CardList'
 import FollowUp from '../components/FollowUp'
 import MapView from '../components/MapView'
 
-const TOGGLE_OPTIONS = [
-  { value: 'month', label: 'Last Month' },
-  { value: 'year',  label: 'Past 12 Months' },
-]
-
 export default function Home() {
   const [records, setRecords] = useState<HomeownerRecord[]>([])
-  const [view, setView]       = useState<'month' | 'year'>('month')
+  const [view, setView]       = useState<Period>('month')
+  const [ethnicity, setEthnicity] = useState<Ethnicity>('all')
   const [items, setItems]     = useState<ScoredRecord[]>([])
   const [followUpV, setFollowUpV] = useState(0)
   const [loading, setLoading] = useState(true)
@@ -30,14 +27,12 @@ export default function Home() {
 
   useEffect(() => {
     if (!records.length) return
-    const range = view === 'month' ? lastMonthRange() : lastYearRange()
-    setItems(top10(records, range, scoreOIC))
-  }, [records, view])
+    const filtered = ethnicity === 'all' ? records : records.filter(r => matchesEthnicity(r, ethnicity))
+    setItems(top10(filtered, getRange(view), scoreOIC))
+  }, [records, view, ethnicity])
 
-  const range = view === 'month' ? lastMonthRange() : lastYearRange()
-  const label = view === 'month'
-    ? `${range.label} · Top 10 priority households`
-    : `${range.label} · Top 10 priority households`
+  const range = getRange(view)
+  const label = `${range.label} · Top ${items.length || 10} priority ${ethLabel(ethnicity)}households`
 
   const onFollowUpChange = useCallback(() => setFollowUpV(v => v + 1), [])
 
@@ -53,7 +48,7 @@ export default function Home() {
 
       <FollowUp records={records} version={followUpV} />
 
-      <Toggle view={view} options={TOGGLE_OPTIONS} onChange={v => setView(v as 'month' | 'year')} />
+      <Filters period={view} onPeriodChange={setView} ethnicity={ethnicity} onEthnicityChange={setEthnicity} />
 
       {loading
         ? <div style={{ textAlign: 'center', color: '#bbb', padding: '40px 16px' }}>Loading…</div>
@@ -66,10 +61,9 @@ export default function Home() {
 
       <div style={{ padding: '0 16px 24px', fontSize: '.74em', color: '#aaa', lineHeight: 1.7 }}>
         <p>¹ Ethnicity estimated from US Census surname data (BISG model) — not verified.</p>
-        <p>² "Origin unknown" means the mailing address was already updated to the new home, or county has no mailing data (Campbell).</p>
-        <p>³ Household size estimated from sqft where available (Lynchburg, Amherst), otherwise from sale price — treat as approximate.</p>
-        <p>⁴ Companies, LLCs, and confirmed local movers are excluded.</p>
-        <p>⁵ Priority score (max 8): Chinese=+2, all others=+1 (OIC welcomes everyone) · out-of-state=+2, in-state/unknown=+1 · ≤2mi=+3, ≤5mi=+2, ≤10mi=+1 · sold ≤30 days=+1.</p>
+        <p>² Household size estimated from sqft where available (Lynchburg, Amherst), otherwise from sale price — treat as approximate.</p>
+        <p>³ Likely rentals excluded: companies/LLCs, and homes whose tax mail still goes to a different address 90+ days after sale (absentee landlords, local or out-of-area).</p>
+        <p>⁴ Priority score (max 5): Chinese=+2, all others=+1 (OIC welcomes everyone) · ≤2mi=+3, ≤5mi=+2, ≤10mi=+1.</p>
       </div>
 
       <footer style={{ textAlign: 'center', padding: 24, fontSize: '.75em', color: '#bbb', lineHeight: 2 }}>

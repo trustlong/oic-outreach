@@ -2,10 +2,17 @@ export function fmtName(n: string): string {
   return n.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ')
 }
 
-export function fmtOrigin(o: string): string {
-  if (o.startsWith('Out-of-state')) return '✈ Moved from ' + o.replace('Out-of-state (', '').replace(')', '')
-  if (o.startsWith('In-state')) return '↔ Moved within VA'
-  return '? Origin unknown'
+import type { EthnicityFilter } from './scoring'
+
+export function ethLabel(e: EthnicityFilter): string {
+  switch (e) {
+    case 'all':      return ''
+    case 'chinese':  return 'Chinese '
+    case 'asian':    return 'Asian '
+    case 'white':    return 'White '
+    case 'hispanic': return 'Hispanic '
+    case 'black':    return 'Black '
+  }
 }
 
 export function fmtAddr(s: string): string {

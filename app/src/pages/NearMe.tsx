@@ -1,34 +1,35 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import type { HomeownerRecord, ScoredRecord } from '../lib/types'
 import { loadCSV } from '../lib/csv'
-import { lastMonthRange, lastYearRange } from '../lib/periods'
-import { scoreGPS, top10 } from '../lib/scoring'
-import Toggle from '../components/Toggle'
+import { getRange } from '../lib/periods'
+import { scoreGPS, top10, matchesEthnicity } from '../lib/scoring'
+import { ethLabel } from '../lib/format'
+import Filters, { type Period, type Ethnicity } from '../components/Filters'
 import SectionLabel from '../components/SectionLabel'
 import CardList from '../components/CardList'
 import FollowUp from '../components/FollowUp'
 import MapView from '../components/MapView'
 
-const TOGGLE_OPTIONS = [
-  { value: 'month', label: 'Last Month' },
-  { value: 'year',  label: 'Past 12 Months' },
-]
-
 export default function NearMe() {
   const [records, setRecords]     = useState<HomeownerRecord[]>([])
-  const [period, setPeriod]       = useState<'month' | 'year'>('month')
+  const [period, setPeriod]       = useState<Period>('month')
+  const [ethnicity, setEthnicity] = useState<Ethnicity>('all')
   const [items, setItems]         = useState<ScoredRecord[]>([])
   const [followUpV, setFollowUpV] = useState(0)
   const [status, setStatus]       = useState('')
   const [located, setLocated]     = useState(false)
   const coords = useRef<{ lat: number; lon: number } | null>(null)
 
+  function rank(data: HomeownerRecord[], p: Period, e: Ethnicity, lat: number, lon: number) {
+    const filtered = e === 'all' ? data : data.filter(r => matchesEthnicity(r, e))
+    return top10(filtered, getRange(p), r => scoreGPS(r, lat, lon))
+  }
+
   useEffect(() => {
     if (!coords.current || !records.length) return
-    const range = period === 'month' ? lastMonthRange() : lastYearRange()
     const { lat, lon } = coords.current
-    setItems(top10(records, range, r => scoreGPS(r, lat, lon)))
-  }, [records, period])
+    setItems(rank(records, period, ethnicity, lat, lon))
+  }, [records, period, ethnicity])
 
   async function locate() {
     setStatus('Loading data…')
@@ -40,8 +41,7 @@ export default function NearMe() {
       pos => {
         coords.current = { lat: pos.coords.latitude, lon: pos.coords.longitude }
         setStatus(`📍 Scoring ${data.length.toLocaleString()} households…`)
-        const range = period === 'month' ? lastMonthRange() : lastYearRange()
-        setItems(top10(data, range, r => scoreGPS(r, coords.current!.lat, coords.current!.lon)))
+        setItems(rank(data, period, ethnicity, coords.current!.lat, coords.current!.lon))
         setLocated(true)
         setStatus('')
       },
@@ -52,22 +52,14 @@ export default function NearMe() {
 
   function relocate() {
     if (!coords.current || !records.length) return
-    const range = period === 'month' ? lastMonthRange() : lastYearRange()
-    setItems(top10(records, range, r => scoreGPS(r, coords.current!.lat, coords.current!.lon)))
+    setItems(rank(records, period, ethnicity, coords.current.lat, coords.current.lon))
   }
 
-  function onPeriodChange(v: string) {
-    setPeriod(v as 'month' | 'year')
-    if (coords.current && records.length) {
-      const range = v === 'month' ? lastMonthRange() : lastYearRange()
-      setItems(top10(records, range, r => scoreGPS(r, coords.current!.lat, coords.current!.lon)))
-    }
-  }
-
-  const range = period === 'month' ? lastMonthRange() : lastYearRange()
+  const range = getRange(period)
+  const eth = ethLabel(ethnicity)
   const label = items.length
-    ? `Top ${items.length} within 3 mi · ${range.label}`
-    : `No households within 3 mi (${range.label}) — try switching to Past 12 Months`
+    ? `Top ${items.length} ${eth}within 3 mi · ${range.label}`
+    : `No ${eth}households within 3 mi (${range.label}) — try a longer date range`
 
   const onFollowUpChange = useCallback(() => setFollowUpV(v => v + 1), [])
 
@@ -95,7 +87,7 @@ export default function NearMe() {
       {located && (
         <>
           <FollowUp records={records} version={followUpV} />
-          <Toggle view={period} options={TOGGLE_OPTIONS} onChange={onPeriodChange} />
+          <Filters period={period} onPeriodChange={setPeriod} ethnicity={ethnicity} onEthnicityChange={setEthnicity} />
           <SectionLabel label={label} onRefresh={relocate} />
           <MapView
             items={items}
@@ -106,7 +98,7 @@ export default function NearMe() {
           <div style={{ padding: '0 16px 24px', fontSize: '.74em', color: '#aaa', lineHeight: 1.7 }}>
             <p>¹ Distance shown from your current location, not OIC church.</p>
             <p>² Ethnicity estimated from US Census surname data — not verified.</p>
-            <p>³ Score (max 8): Chinese=+2, all others=+1 (OIC welcomes everyone) · out-of-state=+2, in-state/unknown=+1 · ≤0.5mi=+3, ≤1mi=+2, ≤2mi=+1 · sold ≤30 days=+1.</p>
+            <p>³ Score (max 5): Chinese=+2, all others=+1 (OIC welcomes everyone) · ≤0.5mi=+3, ≤1mi=+2, ≤2mi=+1.</p>
             <p><a href="disclaimer.html" style={{ color: '#bbb' }}>Disclaimer</a></p>
           </div>
         </>

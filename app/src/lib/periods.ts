@@ -3,6 +3,8 @@ import type { DateRange } from './types'
 const MONTH_NAMES = ['January','February','March','April','May','June',
   'July','August','September','October','November','December']
 
+export type Period = 'month' | '3months' | '6months' | 'year'
+
 export function lastMonthRange(): DateRange {
   const now = new Date()
   const end   = new Date(now.getFullYear(), now.getMonth(), 1)
@@ -10,10 +12,23 @@ export function lastMonthRange(): DateRange {
   return { start, end, label: `${MONTH_NAMES[start.getMonth()]} ${start.getFullYear()}` }
 }
 
-export function lastYearRange(): DateRange {
+function lastNMonthsRange(n: number, label: string): DateRange {
   const start = new Date()
-  start.setFullYear(start.getFullYear() - 1)
-  return { start, end: null, label: 'Past 12 Months' }
+  start.setMonth(start.getMonth() - n)
+  return { start, end: null, label }
+}
+
+export function lastYearRange(): DateRange {
+  return lastNMonthsRange(12, 'Past 12 Months')
+}
+
+export function getRange(period: Period): DateRange {
+  switch (period) {
+    case 'month':   return lastMonthRange()
+    case '3months': return lastNMonthsRange(3, 'Last 3 Months')
+    case '6months': return lastNMonthsRange(6, 'Last 6 Months')
+    case 'year':    return lastYearRange()
+  }
 }
 
 export function parseDate(s: string): Date | null {
