@@ -1,5 +1,5 @@
 import type { HomeownerRecord, ScoredRecord, DateRange } from './types'
-import { inRange } from './periods'
+import { inRange, parseDate } from './periods'
 
 const ENTITY_RE = /\b(LLC|INC|CORP|LTD|LP|LLP|TRUST|TRS|PROPERTIES|HOLDINGS|REALTY|GROUP|FUND|FOUNDATION|SERIES|CONSERVE|BUILDWELL|ENTERPRISES|PARTNERS)\b/i
 
@@ -15,15 +15,23 @@ export function distMiles(lat1: number, lon1: number, lat2: number, lon2: number
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a))
 }
 
+// OIC serves both Chinese and English ministries — every newcomer is welcome,
+// Chinese households still rank slightly higher to support the Chinese service.
 function ethScore(r: HomeownerRecord): number {
-  if (r.IS_CHINESE === 'True') return 3
-  if (r.ESTIMATED_ETHNICITY === 'Asian/PI') return 2
-  if (r.ESTIMATED_ETHNICITY === 'Hispanic' || r.ESTIMATED_ETHNICITY === 'Black') return 1
-  return 0
+  if (r.IS_CHINESE === 'True') return 2
+  if (r.ESTIMATED_ETHNICITY === 'Asian/PI') return 1
+  return 1
 }
 
 function oriScore(r: HomeownerRecord): number {
   return r.MOVE_ORIGIN?.startsWith('Out-of-state') ? 2 : 1
+}
+
+function recencyScore(r: HomeownerRecord): number {
+  const d = parseDate(r.Sale1D)
+  if (!d) return 0
+  const days = (Date.now() - d.getTime()) / 86_400_000
+  return days <= 30 ? 1 : 0
 }
 
 // OIC-based scoring (index page) — distance from church
@@ -34,8 +42,8 @@ export function scoreOIC(r: HomeownerRecord): { score: number; dist: number } | 
   const lat = parseFloat(r.LAT), lon = parseFloat(r.LON)
   if (isNaN(lat) || isNaN(lon)) return null
   const dist = distMiles(OIC_LAT, OIC_LON, lat, lon)
-  const disS = dist <= 5 ? 2 : dist <= 10 ? 1 : 0
-  return { score: ethScore(r) + oriScore(r) + disS, dist }
+  const disS = dist <= 2 ? 3 : dist <= 5 ? 2 : dist <= 10 ? 1 : 0
+  return { score: ethScore(r) + oriScore(r) + disS + recencyScore(r), dist }
 }
 
 // GPS-based scoring (near me page) — distance from user
@@ -47,7 +55,7 @@ export function scoreGPS(r: HomeownerRecord, uLat: number, uLon: number): { scor
   const dist = distMiles(uLat, uLon, lat, lon)
   if (dist > NEARME_MAX_MILES) return null
   const disS = dist <= 0.5 ? 3 : dist <= 1 ? 2 : dist <= 2 ? 1 : 0
-  return { score: ethScore(r) + oriScore(r) + disS, dist }
+  return { score: ethScore(r) + oriScore(r) + disS + recencyScore(r), dist }
 }
 
 export function top10(

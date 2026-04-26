@@ -69,7 +69,7 @@ export default function Home() {
         <p>² "Origin unknown" means the mailing address was already updated to the new home, or county has no mailing data (Campbell).</p>
         <p>³ Household size estimated from sqft where available (Lynchburg, Amherst), otherwise from sale price — treat as approximate.</p>
         <p>⁴ Companies, LLCs, and confirmed local movers are excluded.</p>
-        <p>⁵ Priority score (max 7): ethnicity Chinese=+3, other Asian=+2, Hispanic/Black=+1 · origin out-of-state=+2, in-state/unknown=+1 · distance ≤5mi=+2, ≤10mi=+1.</p>
+        <p>⁵ Priority score (max 8): Chinese=+2, all others=+1 (OIC welcomes everyone) · out-of-state=+2, in-state/unknown=+1 · ≤2mi=+3, ≤5mi=+2, ≤10mi=+1 · sold ≤30 days=+1.</p>
       </div>
 
       <footer style={{ textAlign: 'center', padding: 24, fontSize: '.75em', color: '#bbb', lineHeight: 2 }}>

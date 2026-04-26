@@ -106,7 +106,7 @@ export default function NearMe() {
           <div style={{ padding: '0 16px 24px', fontSize: '.74em', color: '#aaa', lineHeight: 1.7 }}>
             <p>¹ Distance shown from your current location, not OIC church.</p>
             <p>² Ethnicity estimated from US Census surname data — not verified.</p>
-            <p>³ Score (max 7): Chinese=+3, other Asian=+2, Hispanic/Black=+1 · out-of-state=+2, in-state/unknown=+1 · ≤0.5mi=+3, ≤1mi=+2, ≤2mi=+1.</p>
+            <p>³ Score (max 8): Chinese=+2, all others=+1 (OIC welcomes everyone) · out-of-state=+2, in-state/unknown=+1 · ≤0.5mi=+3, ≤1mi=+2, ≤2mi=+1 · sold ≤30 days=+1.</p>
             <p><a href="disclaimer.html" style={{ color: '#bbb' }}>Disclaimer</a></p>
           </div>
         </>
