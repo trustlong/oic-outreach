@@ -412,6 +412,9 @@ def main():
 
     # Date filter
     df["_dt"] = df["SALE_DATE_STR"].apply(parse_date)
+    unparseable = df["_dt"].isna().sum()
+    if unparseable:
+        print(f"   ⚠️  {unparseable:,} rows had unparseable SALE_DATE_STR (silently dropped)")
     df = df[df["_dt"] >= cutoff].copy()
     print(f"   After date filter: {len(df):,}")
 
