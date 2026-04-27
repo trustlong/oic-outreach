@@ -121,7 +121,7 @@ def download_campbell(cutoff_str):
     while True:
         r = requests.get(CAMPBELL_API, params={
             "where": f"SALE1D >= date '{cutoff_str}'",
-            "outFields": "NAME1,STRTNUM,STRTNAME,STRTCITY,STRTZIP,SALE1D,SALE1AMT",
+            "outFields": "NAME1,STRTNUM,STRTNAME,STRTTYPE,STRTCITY,STRTZIP,SALE1D,SALE1AMT",
             "outSR": "4326", "resultOffset": offset,
             "resultRecordCount": BATCH_SIZE, "f": "json",
         }, timeout=60)
@@ -132,7 +132,9 @@ def download_campbell(cutoff_str):
             a["LAT"], a["LON"] = centroid_of_rings(f.get("geometry"))
             a["SOURCE"]       = "Campbell"
             a["Owner1"]       = a.get("NAME1", "")
-            a["LocAddr"]      = f"{a.get('STRTNUM','')} {a.get('STRTNAME','')}".strip()
+            num = a.get('STRTNUM')
+            num_str = str(int(num)) if isinstance(num, (int, float)) and num else ''
+            a["LocAddr"]      = " ".join(p for p in [num_str, a.get('STRTNAME',''), a.get('STRTTYPE','')] if p).strip()
             ts = a.get("SALE1D")
             a["SALE_DATE_STR"] = datetime.fromtimestamp(ts/1000).strftime("%m/%d/%Y") if isinstance(ts,(int,float)) else str(ts or "")
             a["MailStat_src"] = ""
