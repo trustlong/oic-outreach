@@ -32,6 +32,7 @@ export interface DateRange {
 
 export interface CardState {
   visited?: boolean
+  visitedAt?: number
   interested?: boolean
   note?: string
 }

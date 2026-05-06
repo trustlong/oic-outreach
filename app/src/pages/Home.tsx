@@ -4,6 +4,8 @@ import { loadCSV } from '../lib/csv'
 import { getRange } from '../lib/periods'
 import { scoreOIC, top10, matchesEthnicity } from '../lib/scoring'
 import { ethLabel } from '../lib/format'
+import { migrateVisitedTimestamps } from '../lib/storage'
+import { buildWeeklyReport } from '../lib/report'
 import Filters, { type Period, type Ethnicity } from '../components/Filters'
 import SectionLabel from '../components/SectionLabel'
 import CardList from '../components/CardList'
@@ -17,13 +19,27 @@ export default function Home() {
   const [items, setItems]     = useState<ScoredRecord[]>([])
   const [followUpV, setFollowUpV] = useState(0)
   const [loading, setLoading] = useState(true)
+  const [reportStatus, setReportStatus] = useState('')
 
   useEffect(() => {
+    migrateVisitedTimestamps()
     loadCSV('all_homeowners_20mi.csv').then(data => {
       setRecords(data)
       setLoading(false)
     })
   }, [])
+
+  async function copyWeeklyReport() {
+    const text = buildWeeklyReport(records)
+    try {
+      await navigator.clipboard.writeText(text)
+      setReportStatus('✓ Copied to clipboard')
+    } catch {
+      setReportStatus('⚠️ Copy failed — see console')
+      console.log(text)
+    }
+    setTimeout(() => setReportStatus(''), 2000)
+  }
 
   useEffect(() => {
     if (!records.length) return
@@ -67,6 +83,16 @@ export default function Home() {
       </div>
 
       <footer style={{ textAlign: 'center', padding: 24, fontSize: '.75em', color: '#bbb', lineHeight: 2 }}>
+        <div style={{ marginBottom: 14 }}>
+          <button
+            onClick={copyWeeklyReport}
+            disabled={!records.length}
+            style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid #d0d8e8', background: 'white', color: '#1a73e8', fontSize: '.95em', fontWeight: 500, cursor: records.length ? 'pointer' : 'default', opacity: records.length ? 1 : 0.5 }}
+          >
+            📋 Copy weekly report
+          </button>
+          {reportStatus && <div style={{ marginTop: 6, color: '#888', fontSize: '.9em' }}>{reportStatus}</div>}
+        </div>
         Data from Bedford, Lynchburg, Campbell, Amherst &amp; Appomattox County GIS &nbsp;·&nbsp;
         Ethnicity via surgeo BISG &nbsp;·&nbsp; Refreshed every Monday
         <br /><a href="disclaimer.html" style={{ color: '#bbb' }}>Disclaimer</a>

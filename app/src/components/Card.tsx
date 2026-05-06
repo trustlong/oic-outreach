@@ -25,7 +25,7 @@ export default function Card({ item, rank, onFollowUpChange }: Props) {
   function toggleVisited() {
     const next = !visited
     setVisited(next)
-    setState(r, { visited: next })
+    setState(r, next ? { visited: true, visitedAt: Date.now() } : { visited: false })
   }
 
   function toggleInterested() {
