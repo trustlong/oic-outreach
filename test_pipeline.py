@@ -108,6 +108,46 @@ class TestIsLikelyRental(unittest.TestCase):
             "SMITH JOHN", "OWNER ADDR", "RENTAL ADDR", old))
 
 
+class TestIsNonMarketTransfer(unittest.TestCase):
+    """Filters out spouse retitles, gifts, trusts, and $0 transfers."""
+
+    def test_spouse_retitle_with_zero_price(self):
+        # Mariea case: husband removed from deed, $0 transfer
+        self.assertTrue(pipeline.is_non_market_transfer(
+            "REYNOLDS TERRY D & MARIEA H", "REYNOLDS MARIEA H", 0))
+
+    def test_real_arms_length_sale(self):
+        # Rivers case: different family bought from Taylor for $310K
+        self.assertFalse(pipeline.is_non_market_transfer(
+            "TAYLOR THOMAS A & ROBERTA",
+            "RIVERS DAVID & RIVERS KATE & WOLF LU", 310000))
+
+    def test_zero_price_no_overlap_still_dropped(self):
+        # Gift / trust transfer between unrelated-named parties
+        self.assertTrue(pipeline.is_non_market_transfer(
+            "ABC HOLDINGS LLC", "SMITH JOHN", 0))
+
+    def test_same_surname_unrelated_kept(self):
+        # Two unrelated Smiths: surname overlap alone is not enough
+        self.assertFalse(pipeline.is_non_market_transfer(
+            "SMITH JOHN", "SMITH MARY", 200000))
+
+    def test_spouse_retitle_with_nominal_price(self):
+        # Same family on both sides, even with non-zero price
+        self.assertTrue(pipeline.is_non_market_transfer(
+            "JONES BOB & JANE", "JONES JANE", 1))
+
+    def test_missing_grantor_falls_back_to_price(self):
+        # Counties without grantor data: price=0 still drops, real price keeps
+        self.assertTrue(pipeline.is_non_market_transfer("", "SMITH JOHN", 0))
+        self.assertFalse(pipeline.is_non_market_transfer("", "SMITH JOHN", 200000))
+
+    def test_stopwords_dont_create_false_overlap(self):
+        # "TRUST" appearing in both shouldn't count as a name match
+        self.assertFalse(pipeline.is_non_market_transfer(
+            "DOE FAMILY TRUST", "SMITH LIVING TRUST", 250000))
+
+
 class TestIsChineseFullname(unittest.TestCase):
     def test_clear_chinese_name(self):
         self.assertTrue(pipeline.is_chinese_fullname("ZHANG WEI"))

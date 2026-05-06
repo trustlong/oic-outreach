@@ -64,7 +64,7 @@ def download_bedford(cutoff_str, years):
     while True:
         r = requests.get(BEDFORD_API, params={
             "where": where,
-            "outFields": "PIN,LocAddr,Owner1,MailAddr,MailCity,MailStat,MailZip,Sale1D,Sale1Amt",
+            "outFields": "PIN,LocAddr,Owner1,MailAddr,MailCity,MailStat,MailZip,Sale1D,Sale1Amt,Grantor1",
             "outSR": "4326", "resultOffset": offset,
             "resultRecordCount": BATCH_SIZE, "f": "json",
         }, timeout=60)
@@ -79,6 +79,7 @@ def download_bedford(cutoff_str, years):
             a["MailCity_src"] = a.get("MailCity", "") or ""
             a["MailAddr_src"] = a.get("MailAddr", "") or ""
             a["SalePrice"]    = float(a.get("Sale1Amt") or 0)
+            a["Grantor1"]     = (a.get("Grantor1") or "").strip()
             a["FinSqft"]      = None
             records.append(a)
         if len(feats) < BATCH_SIZE: break
@@ -92,7 +93,7 @@ def download_lynchburg(cutoff_str):
     while True:
         r = requests.get(LYNCHBURG_API, params={
             "where": f"Sale1dt >= date '{cutoff_str}'",
-            "outFields": "LocAddr,Owner1,MailAddr,MailCity,MailStat,MailZip,Sale1dt,Sale1Amt,FinSize",
+            "outFields": "LocAddr,Owner1,MailAddr,MailCity,MailStat,MailZip,Sale1dt,Sale1Amt,FinSize,Grantor1",
             "outSR": "4326", "resultOffset": offset,
             "resultRecordCount": BATCH_SIZE, "f": "json",
         }, timeout=60)
@@ -108,6 +109,7 @@ def download_lynchburg(cutoff_str):
             a["MailCity_src"]  = a.get("MailCity", "") or ""
             a["MailAddr_src"]  = a.get("MailAddr", "") or ""
             a["SalePrice"]     = float(a.get("Sale1Amt") or 0)
+            a["Grantor1"]      = (a.get("Grantor1") or "").strip()
             a["FinSqft"]       = a.get("FinSize")
             records.append(a)
         if len(feats) < BATCH_SIZE: break
@@ -121,7 +123,7 @@ def download_campbell(cutoff_str):
     while True:
         r = requests.get(CAMPBELL_API, params={
             "where": f"SALE1D >= date '{cutoff_str}'",
-            "outFields": "NAME1,STRTNUM,STRTNAME,STRTTYPE,STRTCITY,STRTZIP,SALE1D,SALE1AMT",
+            "outFields": "NAME1,STRTNUM,STRTNAME,STRTTYPE,STRTCITY,STRTZIP,SALE1D,SALE1AMT,GRANTOR1",
             "outSR": "4326", "resultOffset": offset,
             "resultRecordCount": BATCH_SIZE, "f": "json",
         }, timeout=60)
@@ -141,6 +143,7 @@ def download_campbell(cutoff_str):
             a["MailCity_src"] = a.get("STRTCITY", "")
             a["MailAddr_src"] = ""
             a["SalePrice"]    = float(a.get("SALE1AMT") or 0)
+            a["Grantor1"]     = (a.get("GRANTOR1") or "").strip()
             a["FinSqft"]      = None
             records.append(a)
         if len(feats) < BATCH_SIZE: break
@@ -175,6 +178,7 @@ def download_amherst(cutoff_str):
             a["MailStat_src"] = state
             a["MailAddr_src"] = a.get("OwnerAddress1", "") or ""
             a["SalePrice"]    = float(a.get("MSELLP") or 0)
+            a["Grantor1"]     = ""
             a["FinSqft"]      = a.get("CNS_AREA_LIVING")
             records.append(a)
         if len(feats) < BATCH_SIZE: break
@@ -209,6 +213,7 @@ def download_appomattox(cutoff_str):
             a["MailAddr_src"] = a.get("OwnerAddress1", "") or ""
             try: a["SalePrice"] = float(a.get("AMCAMT") or 0)
             except: a["SalePrice"] = 0
+            a["Grantor1"] = ""
             a["FinSqft"] = None
             records.append(a)
         if len(feats) < BATCH_SIZE: break
@@ -268,6 +273,34 @@ def is_likely_rental(owner, mailaddr, locaddr, sale_dt):
         return False
     days_since_sale = (datetime.now() - sale_dt).days if sale_dt else 9999
     return days_since_sale > RENTAL_GRACE_DAYS
+
+# Tokens that aren't meaningful for matching grantor↔grantee identities.
+_NAME_STOPWORDS = {
+    "AND", "TRUST", "TRUSTEE", "TRUSTEES", "REVOCABLE",
+    "LIVING", "ESTATE", "ETUX", "ETAL", "ETVIR",
+    "JR", "SR", "III", "IV",
+}
+
+def _name_tokens(s):
+    return {
+        t for t in re.findall(r"[A-Z]{3,}", str(s or "").upper())
+        if t not in _NAME_STOPWORDS
+    }
+
+def is_non_market_transfer(grantor, owner, sale_price):
+    """A retitle / gift / family transfer that doesn't represent a real new homeowner.
+
+    Two signals:
+      1. SalePrice == 0  → almost always a non-arm's-length transfer (gift, trust, spouse retitle).
+      2. Grantor and grantee share 2+ name tokens (e.g. surname + first name) →
+         the same person/family is on both sides of the deed.
+    """
+    try:
+        if not sale_price or float(sale_price) == 0:
+            return True
+    except (TypeError, ValueError):
+        pass
+    return len(_name_tokens(grantor) & _name_tokens(owner)) >= 2
 
 SQFT_BRACKETS = [(1000,1.8),(1500,2.3),(2000,2.7),(2500,3.0),(3000,3.2),(3500,3.4),(4000,3.5),(float('inf'),3.4)]
 
@@ -431,6 +464,14 @@ def main():
     )
     df = df[~df["_is_rental"]].drop(columns=["_is_rental"]).copy()
     print(f"   After rental exclusion: {len(df):,}")
+
+    # Non-market exclusion: drop spouse retitles, gifts, trusts, $0 transfers
+    df["_is_non_market"] = df.apply(
+        lambda r: is_non_market_transfer(r.get("Grantor1", ""), r["Owner1"], r["SalePrice"]),
+        axis=1,
+    )
+    df = df[~df["_is_non_market"]].drop(columns=["_is_non_market"]).copy()
+    print(f"   After non-market exclusion: {len(df):,}")
 
     # Household size
     hh = df.apply(lambda r: estimate_hh(r.get("FinSqft"), r.get("SalePrice")), axis=1)
