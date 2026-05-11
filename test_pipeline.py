@@ -57,28 +57,45 @@ class TestParseCityState(unittest.TestCase):
 
 class TestEstimateHh(unittest.TestCase):
     def test_sqft_buckets(self):
-        # Small house → 2 people
+        # Small house
         size, basis = pipeline.estimate_hh(900, 0)
-        self.assertEqual(size, 2)
+        self.assertAlmostEqual(size, 1.8)
         self.assertIn("sqft=", basis)
 
-        # Mid house → 3 people
+        # Mid house (≤2500 bracket)
         size, _ = pipeline.estimate_hh(2200, 0)
-        self.assertEqual(size, 3)
+        self.assertAlmostEqual(size, 3.0)
 
-        # Big house → 3 people
+        # Big house
         size, _ = pipeline.estimate_hh(3800, 0)
-        self.assertEqual(size, 4)
+        self.assertAlmostEqual(size, 3.5)
 
     def test_price_fallback(self):
         size, basis = pipeline.estimate_hh(None, 350000)
-        self.assertEqual(size, 3)
+        self.assertAlmostEqual(size, 2.7)
         self.assertIn("$350,000", basis)
 
     def test_zero_price_zero_sqft(self):
         size, basis = pipeline.estimate_hh(None, 0)
-        self.assertEqual(size, 2)
+        self.assertAlmostEqual(size, 2.0)
         self.assertEqual(basis, "non-market")
+
+    def test_br_takes_priority(self):
+        # BR overrides sqft/price when present
+        size, basis = pipeline.estimate_hh(900, 100000, br=5)
+        self.assertAlmostEqual(size, 4.6)
+        self.assertEqual(basis, "br=5")
+
+    def test_br_caps_high(self):
+        # BR > 6 caps at the 6-BR row
+        size, basis = pipeline.estimate_hh(None, None, br=8)
+        self.assertAlmostEqual(size, 5.3)
+        self.assertEqual(basis, "br=8")
+
+    def test_br_falsy_falls_through(self):
+        # BR=0 or empty falls through to sqft/price
+        size, basis = pipeline.estimate_hh(None, 200000, br=0)
+        self.assertIn("price=", basis)
 
 
 class TestIsLikelyRental(unittest.TestCase):
