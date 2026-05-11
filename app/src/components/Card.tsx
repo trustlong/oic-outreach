@@ -72,7 +72,7 @@ export default function Card({ item, rank, onFollowUpChange }: Props) {
       {open && (
         <div style={{ padding: '12px 14px 14px 48px', fontSize: '.84em', color: '#555', borderTop: '1px solid #f0f0f0' }}>
           <DetailRow label="Address" value={`${fmtAddr(r.LocAddr)}, ${r.SOURCE}`} />
-          <DetailRow label="Household" value={`Est. ${r.EST_HOUSEHOLD_SIZE || '?'} people`} />
+          <DetailRow label="Household" value={`Est. ${r.EST_HOUSEHOLD_SIZE || '?'} people${r.BR ? ` · ${r.BR} BR` : ''}`} />
 
           {/* Score dots */}
           <div style={{ display: 'flex', gap: 4, marginTop: 10, paddingTop: 10, borderTop: '1px solid #f0f0f0' }}>

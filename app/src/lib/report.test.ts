@@ -17,6 +17,7 @@ function rec(owner: string, overrides: Partial<HomeownerRecord> = {}): Homeowner
     IS_CHINESE: '0',
     EST_HOUSEHOLD_SIZE: '4',
     HH_SIZE_BASIS: 'sqft',
+    BR: '',
     MailCity: '',
     MailStat: '',
     DISTANCE_MILES: '5',

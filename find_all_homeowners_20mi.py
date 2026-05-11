@@ -28,6 +28,11 @@ CAMPBELL_API   = "https://gis.co.campbell.va.us/arcgis/rest/services/CommunityDe
 AMHERST_API    = "https://services8.arcgis.com/TvqqWejphpVuqRec/arcgis/rest/services/Amherst_WL_P/FeatureServer/30/query"
 APPOMATTOX_API = "https://services6.arcgis.com/wnL4os9xzGCi48td/arcgis/rest/services/Appomattox_WL_D/FeatureServer/12/query"
 
+# Bedroom-source layers (Bedford Improvements + Appomattox MainStructures).
+# Campbell carries NUMBDRMS on the same parcel layer, no separate fetch needed.
+BEDFORD_BR_API    = "https://webgis.bedfordcountyva.gov/arcgis/rest/services/OpenData/OpenDataProperty/MapServer/7/query"
+APPOMATTOX_BR_API = "https://services6.arcgis.com/wnL4os9xzGCi48td/arcgis/rest/services/Appomattox_WL_D/FeatureServer/37/query"
+
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
 def centroid_of_rings(geometry):
@@ -50,6 +55,13 @@ def parse_date(s):
         except: pass
     return None
 
+def _to_int(v):
+    try:
+        s = str(v).strip()
+        return int(s) if s else None
+    except (TypeError, ValueError):
+        return None
+
 def parse_city_state(addr2):
     s = str(addr2 or "").strip()
     m = re.search(r'\b([A-Z]{2})\b\s*\d{0,5}[-]?\d{0,4}\s*$', s)
@@ -66,7 +78,7 @@ def download_bedford(cutoff_str, years):
     while True:
         r = requests.get(BEDFORD_API, params={
             "where": where,
-            "outFields": "PIN,LocAddr,Owner1,MailAddr,MailCity,MailStat,MailZip,Sale1D,Sale1Amt,Grantor1",
+            "outFields": "PIN,RPC,LocAddr,Owner1,MailAddr,MailCity,MailStat,MailZip,Sale1D,Sale1Amt,Grantor1",
             "outSR": "4326", "resultOffset": offset,
             "resultRecordCount": BATCH_SIZE, "f": "json",
         }, timeout=60)
@@ -83,6 +95,7 @@ def download_bedford(cutoff_str, years):
             a["SalePrice"]    = float(a.get("Sale1Amt") or 0)
             a["Grantor1"]     = (a.get("Grantor1") or "").strip()
             a["FinSqft"]      = None
+            a["_BR_KEY"]      = (a.get("RPC") or "").strip()
             records.append(a)
         if len(feats) < BATCH_SIZE: break
         offset += BATCH_SIZE
@@ -125,7 +138,7 @@ def download_campbell(cutoff_str):
     while True:
         r = requests.get(CAMPBELL_API, params={
             "where": f"SALE1D >= date '{cutoff_str}'",
-            "outFields": "NAME1,STRTNUM,STRTNAME,STRTTYPE,STRTCITY,STRTZIP,SALE1D,SALE1AMT,GRANTOR1",
+            "outFields": "NAME1,STRTNUM,STRTNAME,STRTTYPE,STRTCITY,STRTZIP,SALE1D,SALE1AMT,GRANTOR1,NUMBDRMS",
             "outSR": "4326", "resultOffset": offset,
             "resultRecordCount": BATCH_SIZE, "f": "json",
         }, timeout=60)
@@ -147,6 +160,7 @@ def download_campbell(cutoff_str):
             a["SalePrice"]    = float(a.get("SALE1AMT") or 0)
             a["Grantor1"]     = (a.get("GRANTOR1") or "").strip()
             a["FinSqft"]      = None
+            a["BR"]           = _to_int(a.get("NUMBDRMS"))
             records.append(a)
         if len(feats) < BATCH_SIZE: break
         offset += BATCH_SIZE
@@ -194,7 +208,7 @@ def download_appomattox(cutoff_str):
     while True:
         r = requests.get(APPOMATTOX_API, params={
             "where": f"AMCDAT >= DATE '{cutoff_str}' AND Owner1 IS NOT NULL",
-            "outFields": "Owner1,ParcelAddress1,OwnerAddress1,OwnerAddress2,AMCAMT,AMCDAT",
+            "outFields": "Owner1,ParcelAddress1,OwnerAddress1,OwnerAddress2,AMCAMT,AMCDAT,AMACT_",
             "outSR": "4326", "resultOffset": offset,
             "resultRecordCount": BATCH_SIZE, "f": "json",
         }, timeout=60)
@@ -217,11 +231,63 @@ def download_appomattox(cutoff_str):
             except: a["SalePrice"] = 0
             a["Grantor1"] = ""
             a["FinSqft"] = None
+            a["_BR_KEY"] = str(a.get("AMACT_")) if a.get("AMACT_") is not None else ""
             records.append(a)
         if len(feats) < BATCH_SIZE: break
         offset += BATCH_SIZE
     print(f"   ✅ {len(records):,}")
     return pd.DataFrame(records)
+
+# ── Bedroom enrichment ────────────────────────────────────────────────────────
+
+def fetch_bedford_br():
+    """Pull NumBdRms from Bedford's Real Estate Improvements layer, keyed by RPC.
+    A parcel can have multiple improvements (house + outbuildings); keep the max BR."""
+    print("📥 Bedford bedrooms (Improvements layer)...")
+    out, offset = {}, 0
+    while True:
+        r = requests.get(BEDFORD_BR_API, params={
+            "where": "NumBdRms <> ''",
+            "outFields": "PIN,NumBdRms",
+            "resultOffset": offset, "resultRecordCount": BATCH_SIZE, "f": "json",
+        }, timeout=60)
+        feats = r.json().get("features", [])
+        if not feats: break
+        for f in feats:
+            a = f["attributes"]
+            rpc = (a.get("PIN") or "").strip()
+            br = _to_int(a.get("NumBdRms"))
+            if rpc and br:
+                out[rpc] = max(out.get(rpc, 0), br)
+        if len(feats) < BATCH_SIZE: break
+        offset += BATCH_SIZE
+    print(f"   ✅ {len(out):,} parcels with bedroom data")
+    return out
+
+def fetch_appomattox_br():
+    """Pull NumBedrooms from Appomattox MainStructures, keyed by AMACT_."""
+    print("📥 Appomattox bedrooms (MainStructures layer)...")
+    out, offset = {}, 0
+    while True:
+        r = requests.get(APPOMATTOX_BR_API, params={
+            "where": "NumBedrooms > 0",
+            "outFields": "AMACT_,NumBedrooms",
+            "resultOffset": offset, "resultRecordCount": BATCH_SIZE, "f": "json",
+        }, timeout=60)
+        data = r.json()
+        if "error" in data: print(f"   ⚠️  {data['error']}"); break
+        feats = data.get("features", [])
+        if not feats: break
+        for f in feats:
+            a = f["attributes"]
+            key = str(a.get("AMACT_")) if a.get("AMACT_") is not None else ""
+            br = _to_int(a.get("NumBedrooms"))
+            if key and br:
+                out[key] = max(out.get(key, 0), br)
+        if len(feats) < BATCH_SIZE: break
+        offset += BATCH_SIZE
+    print(f"   ✅ {len(out):,} parcels with bedroom data")
+    return out
 
 # ── Enrichment ─────────────────────────────────────────────────────────────────
 
@@ -306,21 +372,31 @@ def is_non_market_transfer(grantor, owner, sale_price):
 
 SQFT_BRACKETS = [(1000,1.8),(1500,2.3),(2000,2.7),(2500,3.0),(3000,3.2),(3500,3.4),(4000,3.5),(float('inf'),3.4)]
 
-def estimate_hh(sqft, price):
+# Bedrooms → expected occupants. Slightly above census averages because new-homeowner
+# buyers in this radius skew toward families. Capped at 6 BR.
+BR_TO_HH = {1: 1.5, 2: 2.2, 3: 2.9, 4: 3.8, 5: 4.6, 6: 5.3}
+
+def estimate_hh(sqft, price, br=None):
+    if br:
+        try:
+            n = int(br)
+            return BR_TO_HH.get(n, BR_TO_HH[6] if n > 6 else BR_TO_HH[1]), f"br={n}"
+        except (TypeError, ValueError):
+            pass
     if sqft and float(sqft) > 0:
         sq = float(sqft)
         for ceiling, size in SQFT_BRACKETS:
-            if sq <= ceiling: return int(round(size)), f"sqft={int(sq)}"
-        return 3, f"sqft={int(sq)}"
+            if sq <= ceiling: return round(size, 1), f"sqft={int(sq)}"
+        return 3.4, f"sqft={int(sq)}"
     p = float(price) if price else 0
-    if p == 0:       return 2, "non-market"
-    if p < 100000:   return 2, f"price=${int(p):,}"
-    if p < 200000:   return 2, f"price=${int(p):,}"
-    if p < 300000:   return 3, f"price=${int(p):,}"
-    if p < 400000:   return 3, f"price=${int(p):,}"
-    if p < 500000:   return 3, f"price=${int(p):,}"
-    if p < 750000:   return 3, f"price=${int(p):,}"
-    return 3, f"price=${int(p):,}"
+    if p == 0:       return 2.0, "non-market"
+    if p < 100000:   return 1.8, f"price=${int(p):,}"
+    if p < 200000:   return 2.1, f"price=${int(p):,}"
+    if p < 300000:   return 2.4, f"price=${int(p):,}"
+    if p < 400000:   return 2.7, f"price=${int(p):,}"
+    if p < 500000:   return 2.9, f"price=${int(p):,}"
+    if p < 750000:   return 3.1, f"price=${int(p):,}"
+    return 3.3, f"price=${int(p):,}"
 
 # ── Chinese full-name detection ────────────────────────────────────────────────
 
@@ -445,6 +521,20 @@ def main():
     ], ignore_index=True)
     print(f"\n   Combined: {len(df):,} total")
 
+    # Bedroom enrichment (Bedford + Appomattox via join, Campbell already inline)
+    bedford_br    = fetch_bedford_br()
+    appomattox_br = fetch_appomattox_br()
+    def _lookup_br(row):
+        existing = row.get("BR")
+        if pd.notna(existing) and existing: return existing
+        key = row.get("_BR_KEY") or ""
+        if row["SOURCE"] == "Bedford":    return bedford_br.get(key)
+        if row["SOURCE"] == "Appomattox": return appomattox_br.get(key)
+        return None
+    df["BR"] = df.apply(_lookup_br, axis=1)
+    br_coverage = df["BR"].notna().sum()
+    print(f"   BR coverage: {br_coverage:,}/{len(df):,} ({100*br_coverage/max(len(df),1):.0f}%)")
+
     # Date filter
     df["_dt"] = df["SALE_DATE_STR"].apply(parse_date)
     unparseable = df["_dt"].isna().sum()
@@ -475,8 +565,8 @@ def main():
     df = df[~df["_is_non_market"]].drop(columns=["_is_non_market"]).copy()
     print(f"   After non-market exclusion: {len(df):,}")
 
-    # Household size
-    hh = df.apply(lambda r: estimate_hh(r.get("FinSqft"), r.get("SalePrice")), axis=1)
+    # Household size (BR takes priority over sqft/price when available)
+    hh = df.apply(lambda r: estimate_hh(r.get("FinSqft"), r.get("SalePrice"), r.get("BR")), axis=1)
     df["EST_HOUSEHOLD_SIZE"] = hh.apply(lambda x: x[0])
     df["HH_SIZE_BASIS"]      = hh.apply(lambda x: x[1])
 
@@ -488,7 +578,7 @@ def main():
     keep = ["DISTANCE_MILES","LAT","LON","SOURCE","Owner1","LocAddr",
             "SALE_DATE_STR","SalePrice",
             "ESTIMATED_ETHNICITY","ETHNICITY_CONFIDENCE","IS_CHINESE",
-            "EST_HOUSEHOLD_SIZE","HH_SIZE_BASIS",
+            "EST_HOUSEHOLD_SIZE","HH_SIZE_BASIS","BR",
             "MailCity_src","MailStat_src"]
     keep = [c for c in keep if c in df.columns]
     df = df[keep].rename(columns={"SALE_DATE_STR":"Sale1D","MailCity_src":"MailCity","MailStat_src":"MailStat"})

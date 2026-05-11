@@ -11,6 +11,7 @@ export interface HomeownerRecord {
   IS_CHINESE: string
   EST_HOUSEHOLD_SIZE: string
   HH_SIZE_BASIS: string
+  BR: string
   MailCity: string
   MailStat: string
   DISTANCE_MILES: string
