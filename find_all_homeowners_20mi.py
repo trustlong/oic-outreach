@@ -31,9 +31,11 @@ APPOMATTOX_API = "https://services6.arcgis.com/wnL4os9xzGCi48td/arcgis/rest/serv
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
 def centroid_of_rings(geometry):
-    if not geometry or "rings" not in geometry:
+    if not geometry or not geometry.get("rings"):
         return None, None
     ring = geometry["rings"][0]
+    if not ring:
+        return None, None
     return sum(p[1] for p in ring) / len(ring), sum(p[0] for p in ring) / len(ring)
 
 def dist_miles(lat, lon):
